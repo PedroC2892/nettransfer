@@ -9,6 +9,7 @@ import java.net.UnknownHostException;
 import com.google.gson.Gson;
 
 public class DiscoveryService {
+    public static final int DISCOVERY_PORT = 54321;
     private final Gson gson = new Gson();
     
     // Hostname extraction
@@ -60,7 +61,12 @@ public class DiscoveryService {
                 String json = new String(receivedPacket.getData(), 0, receivedPacket.getLength(), StandardCharsets.UTF_8);
                 DiscoveryMessage received = gson.fromJson(json, DiscoveryMessage.class);
 
-                System.out.println("Recebido de " + receivedPacket.getAddress() + ": " + received.userName);
+                System.out.println("Broadcast recebido de " + receivedPacket.getAddress().getHostAddress() + ":" + receivedPacket.getPort()
+                        + " | type=" + received.type
+                        + " | id=" + received.id
+                        + " | userName=" + received.userName
+                        + " | hostName=" + received.hostName
+                        + " | tcpPort=" + received.tcpPort);
                 
             }
         }
