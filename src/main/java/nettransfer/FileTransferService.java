@@ -51,6 +51,7 @@ public class FileTransferService {
         long startTime = System.currentTimeMillis();
         List<TransferMessage.FileEntry> fileEntries = null;
         long totalSize = 0;
+        long sentBytes = 0;
         try {
             List<PreparedFile> entries = expand(selectedFiles);
             totalSize = entries.stream().filter(e -> !e.isDirectory).mapToLong(e -> e.size).sum();
@@ -97,6 +98,7 @@ public class FileTransferService {
                         while ((read = fis.read(buffer)) != -1) {
                             out.write(buffer, 0, read);
                             transferred += read;
+                            sentBytes = transferred;
                             long now = System.currentTimeMillis();
                             if (now - lastCallback > PROGRESS_INTERVAL_MS || transferred == totalSize) {
                                 double speed = transferred / Math.max(0.001, (now - startTime) / 1000.0);
@@ -115,7 +117,9 @@ public class FileTransferService {
                 listener.onStatusChange(transferId, TransferStatus.DONE);
             }
         } catch (Exception e) {
-            TransferLogger.logSendError(transferId, peer.name);
+            String reason = e.getClass().getSimpleName()
+                    + (e.getMessage() != null ? ": " + e.getMessage() : "");
+            TransferLogger.logSendError(transferId, peer.name, peer.ipAddress, sentBytes, totalSize, reason);
             listener.onStatusChange(transferId, TransferStatus.ERROR);
         }
     }
@@ -125,6 +129,7 @@ public class FileTransferService {
         TransferMessage request = null;
         String senderIp = socket.getInetAddress().getHostAddress();
         long startTime = System.currentTimeMillis();
+        long recvBytes = 0;
         try {
             Handshake hs = Handshake.forReceiver(socket.getInputStream(), socket.getOutputStream());
             InputStream encIn = new EncryptedInputStream(socket.getInputStream(), hs);
@@ -190,6 +195,7 @@ public class FileTransferService {
                         fos.write(buffer, 0, read);
                         remaining -= read;
                         transferred += read;
+                        recvBytes = transferred;
                         long now = System.currentTimeMillis();
                         if (now - lastCallback > PROGRESS_INTERVAL_MS || remaining == 0) {
                             double speed = transferred / Math.max(0.001, (now - startTime) / 1000.0);
@@ -201,8 +207,12 @@ public class FileTransferService {
                 TransferMessage.readFrom(in, gson); // FILE_END
             }
         } catch (Exception e) {
-            String id = request != null ? request.transferId : "desconhecido";
-            TransferLogger.logReceiveError(id);
+            String id = request != null ? request.transferId : "unknown";
+            String name = request != null ? request.senderName : null;
+            long total = request != null ? request.totalSize : 0;
+            String reason = e.getClass().getSimpleName()
+                    + (e.getMessage() != null ? ": " + e.getMessage() : "");
+            TransferLogger.logReceiveError(id, name, senderIp, recvBytes, total, reason);
             listener.onStatusChange(id, TransferStatus.ERROR);
         } finally {
             try { socket.close(); } catch (IOException ignored) {}

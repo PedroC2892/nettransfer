@@ -68,7 +68,7 @@
 .card-host  { -fx-font-size: 12px; -fx-text-fill: #aaaaaa; }
 .card-ip    { -fx-font-size: 11px; -fx-text-fill: #999999; }
 .card-icon  { -fx-font-size: 16px; -fx-text-fill: #999999; }
-.card-selected-check { -fx-text-fill: #f0f0f0; -fx-font-size: 12px; }
+.card-selected-check { -fx-font-size: 16px; -fx-text-fill: #f0f0f0; }
 
 .empty-label { -fx-text-fill: #3a3a3a; -fx-font-size: 13px; }
 

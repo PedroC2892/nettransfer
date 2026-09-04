@@ -42,8 +42,12 @@ public class TransferLogger {
         write(header("SEND REJECTED", transferId) + row("By", peerName));
     }
 
-    public static void logSendError(String transferId, String peerName) {
-        write(header("SEND ERROR", transferId) + row("To", peerName));
+    public static void logSendError(String transferId, String peerName, String peerIp,
+                                     long transferred, long totalSize, String reason) {
+        write(header("SEND ERROR", transferId)
+                + row("To", peerName + (peerIp != null ? " (" + peerIp + ")" : ""))
+                + row("Reason", reason != null ? reason : "unknown")
+                + row("Progress", formatSize(transferred) + " of " + formatSize(totalSize)));
     }
 
     public static void logReceiveRequest(String transferId, String senderName, String senderIp,
@@ -75,8 +79,13 @@ public class TransferLogger {
                 + row("Speed", elapsedMs > 0 ? formatSize((long)(totalSize * 1000.0 / elapsedMs)) + "/s" : "—"));
     }
 
-    public static void logReceiveError(String transferId) {
-        write(header("RECEIVE ERROR", transferId));
+    public static void logReceiveError(String transferId, String senderName, String senderIp,
+                                        long transferred, long totalSize, String reason) {
+        write(header("RECEIVE ERROR", transferId)
+                + row("From", (senderName != null ? senderName : "unknown")
+                        + (senderIp != null ? " (" + senderIp + ")" : ""))
+                + row("Reason", reason != null ? reason : "unknown")
+                + row("Progress", formatSize(transferred) + " of " + formatSize(totalSize)));
     }
 
     public static void logPeerDiscovered(String name, String ip, int port) {

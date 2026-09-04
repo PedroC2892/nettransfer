@@ -95,7 +95,9 @@ public class MainController implements TransferListener {
 
         scene.addEventFilter(KeyEvent.KEY_PRESSED, this::handleKey);
 
-        Timeline logRefresh = new Timeline(new KeyFrame(Duration.seconds(2),
+        // Always ticking so the logs tab is live the moment you switch to it,
+        // even mid-transfer. setLogText() no-ops when nothing changed.
+        Timeline logRefresh = new Timeline(new KeyFrame(Duration.seconds(1),
                 e -> { if (activeTab == 1) refreshLog(); }));
         logRefresh.setCycleCount(Animation.INDEFINITE);
         logRefresh.play();
@@ -236,8 +238,11 @@ public class MainController implements TransferListener {
         overlayDismissBtn.setDisable(true);
         overlayDismissBtn.setOnAction(e -> dismissOverlay());
 
+        Label kbdHint = new Label("[O] open folder   ·   [Ctrl+2] logs   ·   [Ctrl+D] downloads");
+        kbdHint.getStyleClass().add("overlay-hint");
+
         HBox fSp = new HBox(); HBox.setHgrow(fSp, Priority.ALWAYS);
-        HBox footer = new HBox(12, fSp, overlayDismissBtn);
+        HBox footer = new HBox(12, kbdHint, fSp, overlayDismissBtn);
         footer.getStyleClass().add("overlay-footer");
         footer.setAlignment(Pos.CENTER_RIGHT);
 
@@ -250,36 +255,59 @@ public class MainController implements TransferListener {
 
     // ── Tab / overlay switching ───────────────────────────────────────────────
 
+    // True while transfers exist — the overlay is "open" even if temporarily
+    // hidden because the user peeked at the logs tab.
+    private boolean overlayActive = false;
+
     private void switchTab(int tab) {
-        if (overlayView.isVisible()) return;
         activeTab = tab;
         navDevices.getStyleClass().remove("active");
         navLogs.getStyleClass().remove("active");
-        devicesView.setVisible(tab == 0);
-        centerStack.getChildren().get(1).setVisible(tab == 1);
+
         if (tab == 0) {
             navDevices.getStyleClass().add("active");
+            centerStack.getChildren().get(1).setVisible(false);
+            // Back to devices: overlay reclaims the screen if transfers are live
+            if (overlayActive) {
+                overlayView.setVisible(true);
+                devicesView.setVisible(false);
+                overlayDismissBtn.requestFocus();
+            } else {
+                overlayView.setVisible(false);
+                devicesView.setVisible(true);
+            }
         } else {
             navLogs.getStyleClass().add("active");
+            // Logs win over the overlay while you're looking at them
+            overlayView.setVisible(false);
+            devicesView.setVisible(false);
+            centerStack.getChildren().get(1).setVisible(true);
             refreshLog();
             logArea.requestFocus();
         }
     }
 
     private void showOverlay() {
-        overlayView.setVisible(true);
+        overlayActive = true;
+        if (activeTab == 0) {
+            overlayView.setVisible(true);
+            devicesView.setVisible(false);
+            overlayDismissBtn.requestFocus();
+        }
         overlayDismissBtn.setDisable(true);
         overlayHint.setText("In progress...");
-        overlayDismissBtn.requestFocus();
     }
 
     private void dismissOverlay() {
+        overlayActive = false;
         overlayView.setVisible(false);
         activeTransfers.clear();
         overlayCardContainer.getChildren().clear();
-        // Return focus to cards
-        if (!cards.isEmpty()) {
-            new ArrayList<>(cards.values()).get(Math.max(0, focusedCardIndex)).focus();
+        if (activeTab == 0) {
+            devicesView.setVisible(true);
+            if (!cards.isEmpty()) {
+                new ArrayList<>(cards.values()).get(Math.max(0, focusedCardIndex)).focus();
+            }
         }
     }
 
@@ -323,12 +351,25 @@ public class MainController implements TransferListener {
             return;
         }
 
-        // Overlay activo — só fechar
+        // Overlay activo — só fechar (e só quando visível na aba de dispositivos)
         if (overlayView.isVisible()) {
-            if ((e.getCode() == KeyCode.ESCAPE || (e.isControlDown() && e.getCode() == KeyCode.S))
-                    && !overlayDismissBtn.isDisabled()) {
-                dismissOverlay();
-                e.consume();
+            switch (e.getCode()) {
+                case ESCAPE -> {
+                    if (!overlayDismissBtn.isDisabled()) { dismissOverlay(); e.consume(); }
+                }
+                case S -> {
+                    if (e.isControlDown() && !overlayDismissBtn.isDisabled()) { dismissOverlay(); e.consume(); }
+                }
+                case O -> {
+                    // Open the receive folder of the first finished transfer that has one
+                    activeTransfers.values().stream()
+                            .filter(t -> t.receiveDir != null && t.isDone())
+                            .findFirst()
+                            .ifPresent(t -> openFolder(t.receiveDir));
+                    e.consume();
+                }
+                case TAB -> { /* let JavaFX move focus between visible Open folder buttons */ }
+                default -> {}
             }
             return;
         }
@@ -780,10 +821,11 @@ public class MainController implements TransferListener {
             statusLabel = new Label("Waiting...");
             statusLabel.getStyleClass().add("overlay-status");
 
-            openBtn = new Button("Open folder");
+            openBtn = new Button("Open folder  [O]");
             openBtn.getStyleClass().add("btn-secondary");
             openBtn.setStyle("-fx-font-size:11px; -fx-padding: 4 12 4 12;");
             openBtn.setVisible(false);
+            openBtn.setFocusTraversable(true);
             openBtn.setOnAction(e -> { if (receiveDir != null) openFolder(receiveDir); });
 
             HBox sp = new HBox(); HBox.setHgrow(sp, Priority.ALWAYS);
@@ -872,7 +914,7 @@ public class MainController implements TransferListener {
         final String peerId;
         private boolean selected = false;
         private final VBox box;
-        private final Label nameLabel, hostLabel, ipLabel, checkLabel;
+        private final Label nameLabel, hostLabel, ipLabel, statusDot;
 
         DeviceCard(Peer peer) {
             this.peerId = peer.id;
@@ -881,15 +923,12 @@ public class MainController implements TransferListener {
             box.setAlignment(Pos.TOP_LEFT);
             box.setFocusTraversable(true);
 
-            HBox topRow = new HBox();
+            // Single dot that swaps glyph on selection — stays in place
+            statusDot = new Label("○");
+            statusDot.getStyleClass().add("card-icon");
+
+            HBox topRow = new HBox(statusDot);
             topRow.setAlignment(Pos.CENTER_LEFT);
-            Label icon = new Label("○");
-            icon.getStyleClass().add("card-icon");
-            HBox sp = new HBox(); HBox.setHgrow(sp, Priority.ALWAYS);
-            checkLabel = new Label("●");
-            checkLabel.getStyleClass().add("card-selected-check");
-            checkLabel.setVisible(false);
-            topRow.getChildren().addAll(icon, sp, checkLabel);
 
             nameLabel = new Label(peer.name); nameLabel.getStyleClass().add("card-name");
             hostLabel = new Label(peer.hostName); hostLabel.getStyleClass().add("card-host");
@@ -917,7 +956,9 @@ public class MainController implements TransferListener {
         void setSelected(boolean v) {
             selected = v;
             if (v) box.getStyleClass().add("selected"); else box.getStyleClass().remove("selected");
-            checkLabel.setVisible(v);
+            statusDot.setText(v ? "●" : "○");
+            statusDot.getStyleClass().removeAll("card-icon", "card-selected-check");
+            statusDot.getStyleClass().add(v ? "card-selected-check" : "card-icon");
         }
 
         void focus() { box.requestFocus(); }
