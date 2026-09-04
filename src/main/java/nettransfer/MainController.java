@@ -905,11 +905,13 @@ public class MainController implements TransferListener {
 
     @Override
     public boolean onIncomingRequest(String transferId, String senderName, String senderIp,
-                                     List<TransferMessage.FileEntry> files, long totalSize, int totalFiles) {
+                                     List<TransferMessage.FileEntry> files, long totalSize, int totalFiles,
+                                     long usableSpace, boolean enoughSpace) {
         // Show the transfer entry immediately (shows overlay if not shown)
         addToOverlay(transferId, senderName, senderIp, "RECEIVE", files, totalSize);
 
-        TransferRequestDialog dlg = new TransferRequestDialog(stage, senderName, senderIp, files, totalSize, totalFiles);
+        TransferRequestDialog dlg = new TransferRequestDialog(stage, senderName, senderIp, files, totalSize, totalFiles,
+                usableSpace, enoughSpace);
         boolean accepted = dlg.showAndWait();
 
         ActiveTransfer at = activeTransfers.get(transferId);

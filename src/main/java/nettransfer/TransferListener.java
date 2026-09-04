@@ -4,7 +4,8 @@ import java.util.List;
 
 public interface TransferListener {
     boolean onIncomingRequest(String transferId, String senderName, String senderIp,
-                              List<TransferMessage.FileEntry> files, long totalSize, int totalFiles);
+                              List<TransferMessage.FileEntry> files, long totalSize, int totalFiles,
+                              long usableSpace, boolean enoughSpace);
 
     void onProgress(String transferId, long transferred, long total, double speedBytesPerSec);
 

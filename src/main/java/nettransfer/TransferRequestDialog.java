@@ -24,16 +24,21 @@ public class TransferRequestDialog {
     private final List<TransferMessage.FileEntry> files;
     private final long totalSize;
     private final int totalFiles;
+    private final long usableSpace;
+    private final boolean enoughSpace;
     private boolean accepted = false;
 
     public TransferRequestDialog(Stage owner, String senderName, String senderIp,
-                                  List<TransferMessage.FileEntry> files, long totalSize, int totalFiles) {
+                                  List<TransferMessage.FileEntry> files, long totalSize, int totalFiles,
+                                  long usableSpace, boolean enoughSpace) {
         this.owner = owner;
         this.senderName = senderName;
         this.senderIp = senderIp;
         this.files = files;
         this.totalSize = totalSize;
         this.totalFiles = totalFiles;
+        this.usableSpace = usableSpace;
+        this.enoughSpace = enoughSpace;
     }
 
     public boolean showAndWait() {
@@ -97,11 +102,19 @@ public class TransferRequestDialog {
         summaryLabel.getStyleClass().add("summary-text");
         summary.getChildren().add(summaryLabel);
 
+        Label spaceWarning = new Label("Not enough space — needs " + MainController.formatSize(totalSize)
+                + ", " + MainController.formatSize(usableSpace) + " available");
+        spaceWarning.getStyleClass().add("verify-warning");
+        spaceWarning.setVisible(!enoughSpace);
+        spaceWarning.setManaged(!enoughSpace);
+        VBox.setMargin(spaceWarning, new Insets(8, 22, 0, 22));
+
         // Buttons — Enter accepts, Esc rejects
         Button acceptBtn = new Button("Aceitar  [Enter]");
         acceptBtn.getStyleClass().add("btn-primary");
         acceptBtn.setPrefWidth(130);
         acceptBtn.setDefaultButton(true);
+        acceptBtn.setDisable(!enoughSpace);
         acceptBtn.setOnAction(e -> { accepted = true; dialog.close(); });
 
         Button rejectBtn = new Button("Recusar  [Esc]");
@@ -114,14 +127,14 @@ public class TransferRequestDialog {
         btnRow.setAlignment(Pos.CENTER_RIGHT);
         btnRow.setPadding(new Insets(14, 22, 18, 22));
 
-        root.getChildren().addAll(header, scroll, summary, btnRow);
+        root.getChildren().addAll(header, scroll, summary, spaceWarning, btnRow);
 
         Scene scene = new Scene(root);
         scene.getStylesheets().add(getClass().getResource("app.css").toExternalForm());
 
         // Global keyboard for dialog
         scene.setOnKeyPressed(e -> {
-            if (e.getCode() == KeyCode.ENTER) { accepted = true; dialog.close(); }
+            if (e.getCode() == KeyCode.ENTER) { if (enoughSpace) { accepted = true; dialog.close(); } }
             else if (e.getCode() == KeyCode.ESCAPE) { accepted = false; dialog.close(); }
         });
 

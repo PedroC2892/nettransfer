@@ -30,6 +30,7 @@ import javafx.application.Platform;
 
 public class FileTransferService {
     private static final long PROGRESS_INTERVAL_MS = 150;
+    private static final long SPACE_SAFETY_MARGIN = 100L * 1024 * 1024;
 
     static final Path DOWNLOAD_BASE = Paths.get(System.getProperty("user.home"), "Downloads", "NetTransfer");
     private static final DateTimeFormatter FOLDER_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss");
@@ -54,6 +55,17 @@ public class FileTransferService {
         long sentBytes = 0;
         try {
             List<PreparedFile> entries = expand(selectedFiles);
+
+            for (PreparedFile entry : entries) {
+                if (entry.isDirectory) continue;
+                if (!entry.file.exists() || !entry.file.canRead()) {
+                    TransferLogger.logSendError(transferId, peer.name, peer.ipAddress, 0, 0,
+                            "File no longer exists or is unreadable: " + entry.relativePath);
+                    listener.onStatusChange(transferId, TransferStatus.ERROR);
+                    return;
+                }
+            }
+
             totalSize = entries.stream().filter(e -> !e.isDirectory).mapToLong(e -> e.size).sum();
             int totalFiles = (int) entries.stream().filter(e -> !e.isDirectory).count();
             fileEntries = entries.stream()
@@ -130,6 +142,8 @@ public class FileTransferService {
         String senderIp = socket.getInetAddress().getHostAddress();
         long startTime = System.currentTimeMillis();
         long recvBytes = 0;
+        Path destBase = null;
+        List<Path> writtenFiles = new ArrayList<>();
         try {
             Handshake hs = Handshake.forReceiver(socket.getInputStream(), socket.getOutputStream());
             InputStream encIn = new EncryptedInputStream(socket.getInputStream(), hs);
@@ -145,7 +159,10 @@ public class FileTransferService {
             TransferLogger.logReceiveRequest(request.transferId, request.senderName, senderIp,
                     request.files, request.totalSize);
 
-            boolean accepted = waitForUiResponse(listener, finalRequest, finalIp);
+            long usableSpace = Files.getFileStore(DOWNLOAD_BASE).getUsableSpace();
+            boolean enoughSpace = usableSpace >= request.totalSize + SPACE_SAFETY_MARGIN;
+
+            boolean accepted = waitForUiResponse(listener, finalRequest, finalIp, usableSpace, enoughSpace);
 
             TransferMessage.transferResponse(request.transferId, accepted).writeTo(out, gson);
             if (!accepted) {
@@ -157,7 +174,7 @@ public class FileTransferService {
             listener.onStatusChange(request.transferId, TransferStatus.TRANSFERRING);
 
             String timestamp = LocalDateTime.now().format(FOLDER_FMT);
-            Path destBase = DOWNLOAD_BASE.resolve(timestamp).toAbsolutePath().normalize();
+            destBase = DOWNLOAD_BASE.resolve(timestamp).toAbsolutePath().normalize();
             Files.createDirectories(destBase);
 
             TransferLogger.logReceiveAccepted(request.transferId, destBase.toString());
@@ -185,6 +202,7 @@ public class FileTransferService {
                 }
                 Files.createDirectories(target.getParent());
                 target = uniquePath(target);
+                writtenFiles.add(target);
 
                 try (FileOutputStream fos = new FileOutputStream(target.toFile())) {
                     long remaining = msg.size;
@@ -213,19 +231,42 @@ public class FileTransferService {
             String reason = e.getClass().getSimpleName()
                     + (e.getMessage() != null ? ": " + e.getMessage() : "");
             TransferLogger.logReceiveError(id, name, senderIp, recvBytes, total, reason);
+            cleanupPartial(id, destBase, writtenFiles);
             listener.onStatusChange(id, TransferStatus.ERROR);
         } finally {
             try { socket.close(); } catch (IOException ignored) {}
         }
     }
 
-    private static boolean waitForUiResponse(TransferListener listener, TransferMessage request, String senderIp) {
+    private static void cleanupPartial(String transferId, Path destBase, List<Path> writtenFiles) {
+        int removed = 0;
+        long freed = 0;
+        for (Path p : writtenFiles) {
+            try {
+                long size = Files.exists(p) ? Files.size(p) : 0;
+                if (Files.deleteIfExists(p)) {
+                    removed++;
+                    freed += size;
+                }
+            } catch (IOException ignored) {}
+        }
+        if (destBase != null) {
+            try (Stream<Path> stream = Files.exists(destBase) ? Files.list(destBase) : null) {
+                if (stream != null && stream.findAny().isEmpty()) Files.deleteIfExists(destBase);
+            } catch (IOException ignored) {}
+        }
+        if (removed > 0) TransferLogger.logPartialCleanup(transferId, removed, freed);
+    }
+
+    private static boolean waitForUiResponse(TransferListener listener, TransferMessage request, String senderIp,
+                                              long usableSpace, boolean enoughSpace) {
         boolean[] result = {false};
         CountDownLatch latch = new CountDownLatch(1);
         Platform.runLater(() -> {
             result[0] = listener.onIncomingRequest(
                     request.transferId, request.senderName, senderIp,
-                    request.files, request.totalSize, request.totalFiles);
+                    request.files, request.totalSize, request.totalFiles,
+                    usableSpace, enoughSpace);
             latch.countDown();
         });
         try { latch.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
