@@ -1,39 +1,21 @@
 package nettransfer;
 
 import javax.swing.SwingUtilities;
-import java.util.List;
 
 public class Main {
     public static void main(String[] args) throws Exception {
-        PeerListFrame peerListFrame = new PeerListFrame();
+        MainFrame mainFrame = new MainFrame();
 
-        TransferListener listener = new TransferListener() {
-            @Override
-            public boolean onIncomingRequest(String transferId, String senderName, List<TransferMessage.FileEntry> files, long totalSize, int totalFiles) {
-                System.out.println("Pedido de transferencia de " + senderName + " (" + totalFiles + " ficheiros, " + totalSize + " bytes)");
-                return true;
-            }
-
-            @Override
-            public void onProgress(String transferId, long transferred, long total, double speedBps) {
-            }
-
-            @Override
-            public void onStatusChange(String transferId, TransferStatus status) {
-                System.out.println("Transferencia " + transferId + ": " + status);
-            }
-        };
-
-        ConnectionManager connectionManager = new ConnectionManager(listener);
+        ConnectionManager connectionManager = new ConnectionManager(mainFrame);
         connectionManager.start();
 
         DiscoveryService discoveryService = new DiscoveryService(connectionManager.getPort());
 
-        SwingUtilities.invokeLater(() -> peerListFrame.setVisible(true));
+        SwingUtilities.invokeLater(() -> mainFrame.setVisible(true));
 
         Thread receiverThread = new Thread(() -> {
             try {
-                discoveryService.broadcastReceiver(DiscoveryService.DISCOVERY_PORT, peerListFrame::addOrUpdatePeer);
+                discoveryService.broadcastReceiver(DiscoveryService.DISCOVERY_PORT, mainFrame::onPeerDiscovered);
             } catch (Exception e) {
                 e.printStackTrace();
             }
