@@ -194,7 +194,7 @@ public class MainController implements TransferListener {
         sendButton.setDisable(true);
         sendButton.setOnAction(e -> sendToSelected());
 
-        Button openBtn = new Button("Downloads");
+        Button openBtn = new Button("Downloads  [Ctrl+D]");
         openBtn.getStyleClass().add("btn-secondary");
         openBtn.setOnAction(e -> openFolder(FileTransferService.DOWNLOAD_BASE.toString()));
 
@@ -308,6 +308,20 @@ public class MainController implements TransferListener {
     private void handleKey(KeyEvent e) {
         if (e.isControlDown() && e.getCode() == KeyCode.DIGIT1) { switchTab(0); e.consume(); return; }
         if (e.isControlDown() && e.getCode() == KeyCode.DIGIT2) { switchTab(1); e.consume(); return; }
+
+        // Works on every tab, even while the overlay is up
+        if (e.isControlDown() && e.getCode() == KeyCode.D) {
+            openFolder(FileTransferService.DOWNLOAD_BASE.toString());
+            e.consume();
+            return;
+        }
+
+        // Open the log file itself — only meaningful on the logs tab
+        if (e.isControlDown() && e.getCode() == KeyCode.L && activeTab == 1) {
+            openPath(TransferLogger.LOG_FILE.toString());
+            e.consume();
+            return;
+        }
 
         // Overlay activo — só fechar
         if (overlayView.isVisible()) {
@@ -479,11 +493,11 @@ public class MainController implements TransferListener {
         zoomIn.setFocusTraversable(false);
         zoomIn.setOnAction(e -> { changeLogZoom(+1); logArea.requestFocus(); });
 
-        Button openLogBtn = new Button("Open folder");
+        Button openLogBtn = new Button("Open log  [Ctrl+L]");
         openLogBtn.getStyleClass().add("btn-secondary");
         openLogBtn.setStyle("-fx-font-size:11px; -fx-padding: 6 10 6 10;");
         openLogBtn.setFocusTraversable(false);
-        openLogBtn.setOnAction(e -> openFolder(FileTransferService.DOWNLOAD_BASE.toString()));
+        openLogBtn.setOnAction(e -> openPath(TransferLogger.LOG_FILE.toString()));
 
         HBox searchBar = new HBox(8, logSearchField, clearSearch, zoomOut, zoomIn, openLogBtn);
         searchBar.setAlignment(Pos.CENTER_LEFT);
@@ -506,7 +520,13 @@ public class MainController implements TransferListener {
         });
 
         logSearchField.setOnKeyPressed(e -> {
-            if (e.getCode() == KeyCode.ESCAPE) {
+            if (e.isControlDown() && e.getCode() == KeyCode.L) {
+                openPath(TransferLogger.LOG_FILE.toString());
+                e.consume();
+            } else if (e.isControlDown() && e.getCode() == KeyCode.D) {
+                openFolder(FileTransferService.DOWNLOAD_BASE.toString());
+                e.consume();
+            } else if (e.getCode() == KeyCode.ESCAPE) {
                 logSearchField.clear();
                 logArea.requestFocus();
                 e.consume();
@@ -524,6 +544,8 @@ public class MainController implements TransferListener {
                     case PLUS, EQUALS, ADD -> { changeLogZoom(+1); e.consume(); }
                     case MINUS, SUBTRACT -> { changeLogZoom(-1); e.consume(); }
                     case DIGIT0, NUMPAD0 -> { logFontSize = 13; applyLogFont(); e.consume(); }
+                    case L -> { openPath(TransferLogger.LOG_FILE.toString()); e.consume(); }
+                    case D -> { openFolder(FileTransferService.DOWNLOAD_BASE.toString()); e.consume(); }
                     default -> {}
                 }
                 return;
@@ -621,6 +643,10 @@ public class MainController implements TransferListener {
     // ── Utilities ─────────────────────────────────────────────────────────────
 
     static void openFolder(String path) {
+        openPath(path);
+    }
+
+    static void openPath(String path) {
         new Thread(() -> {
             try { new ProcessBuilder("xdg-open", path).start(); }
             catch (Exception e) { try { Desktop.getDesktop().open(new File(path)); } catch (Exception ignored) {} }
