@@ -17,6 +17,8 @@ import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -24,8 +26,14 @@ import java.util.stream.Stream;
 
 public class FileTransferService {
     private static final int CHUNK_SIZE = 64 * 1024;
-    private static final String DOWNLOAD_DIR = System.getProperty("user.home") + "/Downloads/NetTransfer/";
     private static final long PROGRESS_INTERVAL_MS = 150;
+
+    static final Path DOWNLOAD_BASE = Paths.get(System.getProperty("user.home"), "Downloads", "NetTransfer");
+    private static final DateTimeFormatter FOLDER_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss");
+
+    public static String getDownloadBaseDir() {
+        return DOWNLOAD_BASE.toString();
+    }
 
     public static void sendFiles(Peer peer, List<File> selectedFiles, String transferId, String senderName, TransferListener listener) {
         Thread t = new Thread(() -> doSend(peer, selectedFiles, transferId, senderName, listener));
@@ -115,8 +123,12 @@ public class FileTransferService {
             }
 
             listener.onStatusChange(request.transferId, TransferStatus.TRANSFERRING);
-            Path destBase = Paths.get(DOWNLOAD_DIR).toAbsolutePath().normalize();
+
+            // Each transfer gets its own timestamped subfolder
+            String timestamp = LocalDateTime.now().format(FOLDER_FMT);
+            Path destBase = DOWNLOAD_BASE.resolve(timestamp).toAbsolutePath().normalize();
             Files.createDirectories(destBase);
+            listener.onReceiveDir(request.transferId, destBase.toString());
 
             long transferred = 0;
             long startTime = System.currentTimeMillis();
@@ -160,16 +172,13 @@ public class FileTransferService {
                         }
                     }
                 }
-                TransferMessage.readFrom(in, gson);
+                TransferMessage.readFrom(in, gson); // FILE_END
             }
         } catch (Exception e) {
             String id = request != null ? request.transferId : "desconhecido";
             listener.onStatusChange(id, TransferStatus.ERROR);
         } finally {
-            try {
-                socket.close();
-            } catch (IOException ignored) {
-            }
+            try { socket.close(); } catch (IOException ignored) {}
         }
     }
 
@@ -182,24 +191,16 @@ public class FileTransferService {
     }
 
     private static Path uniquePath(Path target) {
-        if (!Files.exists(target)) {
-            return target;
-        }
+        if (!Files.exists(target)) return target;
         String name = target.getFileName().toString();
-        String base = name;
-        String ext = "";
+        String base = name, ext = "";
         int dot = name.lastIndexOf('.');
-        if (dot > 0) {
-            base = name.substring(0, dot);
-            ext = name.substring(dot);
-        }
+        if (dot > 0) { base = name.substring(0, dot); ext = name.substring(dot); }
         Path parent = target.getParent();
         int i = 2;
         Path candidate;
-        do {
-            candidate = parent.resolve(base + "_" + i + ext);
-            i++;
-        } while (Files.exists(candidate));
+        do { candidate = parent.resolve(base + "_" + i + ext); i++; }
+        while (Files.exists(candidate));
         return candidate;
     }
 

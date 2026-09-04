@@ -8,4 +8,6 @@ public interface TransferListener {
     void onProgress(String transferId, long transferred, long total, double speedBytesPerSec);
 
     void onStatusChange(String transferId, TransferStatus status);
+
+    default void onReceiveDir(String transferId, String dirPath) {}
 }

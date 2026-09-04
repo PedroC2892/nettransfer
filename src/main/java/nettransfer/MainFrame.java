@@ -16,6 +16,7 @@ import javax.swing.border.Border;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.Desktop;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
@@ -27,7 +28,10 @@ import java.awt.datatransfer.DataFlavor;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.geom.RoundRectangle2D;
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.InputStreamReader;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -48,6 +52,7 @@ public class MainFrame extends JFrame implements TransferListener {
     private final Set<String> selectedPeerIds = new LinkedHashSet<>();
     private final List<File> selectedFiles = new ArrayList<>();
     private final Map<String, TransferProgressPanel> progressPanels = new ConcurrentHashMap<>();
+    private final Map<String, String> transferDirs = new ConcurrentHashMap<>();
 
     private final JPanel cardsPanel;
     private final JLabel emptyLabel;
@@ -80,6 +85,9 @@ public class MainFrame extends JFrame implements TransferListener {
         JButton chooseButton = new JButton("Selecionar ficheiros");
         chooseButton.addActionListener(e -> chooseFiles());
 
+        JButton openDownloadsButton = new JButton("Abrir pasta de downloads");
+        openDownloadsButton.addActionListener(e -> openFolder(FileTransferService.DOWNLOAD_BASE.toString()));
+
         JPanel dropZone = new JPanel(new BorderLayout());
         dropZone.setBorder(BorderFactory.createDashedBorder(Color.GRAY));
         dropZone.setPreferredSize(new Dimension(0, 60));
@@ -92,6 +100,7 @@ public class MainFrame extends JFrame implements TransferListener {
         JPanel buttonsRow = new JPanel(new FlowLayout(FlowLayout.LEFT));
         buttonsRow.add(chooseButton);
         buttonsRow.add(sendButton);
+        buttonsRow.add(openDownloadsButton);
         controlPanel.add(dropZone);
         controlPanel.add(buttonsRow);
         controlPanel.add(filesLabel);
@@ -135,21 +144,15 @@ public class MainFrame extends JFrame implements TransferListener {
         long now = System.currentTimeMillis();
         List<String> stale = new ArrayList<>();
         for (Map.Entry<String, Long> e : lastSeen.entrySet()) {
-            if (now - e.getValue() > PEER_TIMEOUT_MS) {
-                stale.add(e.getKey());
-            }
+            if (now - e.getValue() > PEER_TIMEOUT_MS) stale.add(e.getKey());
         }
-        if (stale.isEmpty()) {
-            return;
-        }
+        if (stale.isEmpty()) return;
         for (String id : stale) {
             peers.remove(id);
             lastSeen.remove(id);
             selectedPeerIds.remove(id);
             DeviceCard card = cards.remove(id);
-            if (card != null) {
-                cardsPanel.remove(card);
-            }
+            if (card != null) cardsPanel.remove(card);
         }
         cardsPanel.revalidate();
         cardsPanel.repaint();
@@ -158,12 +161,8 @@ public class MainFrame extends JFrame implements TransferListener {
     }
 
     private void chooseFiles() {
-        JFileChooser chooser = new JFileChooser();
-        chooser.setMultiSelectionEnabled(true);
-        chooser.setFileSelectionMode(JFileChooser.FILES_AND_DIRECTORIES);
-        if (chooser.showOpenDialog(this) == JFileChooser.APPROVE_OPTION) {
-            addSelectedFiles(Arrays.asList(chooser.getSelectedFiles()));
-        }
+        List<File> files = NativeFileChooser.open(this);
+        if (!files.isEmpty()) addSelectedFiles(files);
     }
 
     private void addSelectedFiles(List<File> files) {
@@ -174,32 +173,20 @@ public class MainFrame extends JFrame implements TransferListener {
     }
 
     private long sizeOf(File f) {
-        if (f.isFile()) {
-            return f.length();
-        }
+        if (f.isFile()) return f.length();
         File[] children = f.listFiles();
-        if (children == null) {
-            return 0;
-        }
+        if (children == null) return 0;
         long total = 0;
-        for (File c : children) {
-            total += sizeOf(c);
-        }
+        for (File c : children) total += sizeOf(c);
         return total;
     }
 
     static String formatSize(long bytes) {
-        if (bytes < 1024) {
-            return bytes + " B";
-        }
+        if (bytes < 1024) return bytes + " B";
         double kb = bytes / 1024.0;
-        if (kb < 1024) {
-            return String.format("%.1f KB", kb);
-        }
+        if (kb < 1024) return String.format("%.1f KB", kb);
         double mb = kb / 1024.0;
-        if (mb < 1024) {
-            return String.format("%.1f MB", mb);
-        }
+        if (mb < 1024) return String.format("%.1f MB", mb);
         return String.format("%.2f GB", mb / 1024.0);
     }
 
@@ -212,32 +199,38 @@ public class MainFrame extends JFrame implements TransferListener {
         List<File> filesToSend = new ArrayList<>(selectedFiles);
         for (String peerId : new ArrayList<>(selectedPeerIds)) {
             Peer peer = peers.get(peerId);
-            if (peer == null) {
-                continue;
-            }
+            if (peer == null) continue;
             String transferId = UUID.randomUUID().toString();
-            TransferProgressPanel panel = new TransferProgressPanel(peer.name);
+            TransferProgressPanel panel = new TransferProgressPanel(peer.name, null);
             progressPanels.put(transferId, panel);
             progressContainer.add(panel);
             progressContainer.revalidate();
             FileTransferService.sendFiles(peer, filesToSend, transferId, senderName, this);
         }
-
         selectedFiles.clear();
         filesLabel.setText("Nenhum ficheiro selecionado");
         for (String peerId : new ArrayList<>(selectedPeerIds)) {
             DeviceCard card = cards.get(peerId);
-            if (card != null) {
-                card.setSelected(false);
-            }
+            if (card != null) card.setSelected(false);
         }
         selectedPeerIds.clear();
         updateSendButtonState();
     }
 
+    static void openFolder(String path) {
+        try {
+            // Try xdg-open first (works on any Linux DE)
+            new ProcessBuilder("xdg-open", path).start();
+        } catch (Exception e) {
+            try {
+                Desktop.getDesktop().open(new File(path));
+            } catch (Exception ignored) {}
+        }
+    }
+
     @Override
     public boolean onIncomingRequest(String transferId, String senderName, List<TransferMessage.FileEntry> files, long totalSize, int totalFiles) {
-        TransferProgressPanel panel = new TransferProgressPanel(senderName);
+        TransferProgressPanel panel = new TransferProgressPanel(senderName, null);
         progressPanels.put(transferId, panel);
         progressContainer.add(panel);
         progressContainer.revalidate();
@@ -250,12 +243,19 @@ public class MainFrame extends JFrame implements TransferListener {
     }
 
     @Override
+    public void onReceiveDir(String transferId, String dirPath) {
+        transferDirs.put(transferId, dirPath);
+        SwingUtilities.invokeLater(() -> {
+            TransferProgressPanel panel = progressPanels.get(transferId);
+            if (panel != null) panel.setReceiveDir(dirPath);
+        });
+    }
+
+    @Override
     public void onProgress(String transferId, long transferred, long total, double speedBps) {
         SwingUtilities.invokeLater(() -> {
             TransferProgressPanel panel = progressPanels.get(transferId);
-            if (panel != null) {
-                panel.updateProgress(transferred, total, speedBps);
-            }
+            if (panel != null) panel.updateProgress(transferred, total, speedBps);
         });
     }
 
@@ -263,41 +263,30 @@ public class MainFrame extends JFrame implements TransferListener {
     public void onStatusChange(String transferId, TransferStatus status) {
         SwingUtilities.invokeLater(() -> {
             TransferProgressPanel panel = progressPanels.get(transferId);
-            if (panel != null) {
-                panel.setStatus(statusText(status));
-            }
+            if (panel != null) panel.setStatus(statusText(status));
         });
     }
 
     private String statusText(TransferStatus status) {
-        switch (status) {
-            case WAITING:
-                return "A aguardar";
-            case TRANSFERRING:
-                return "A transferir";
-            case DONE:
-                return "Concluido";
-            case REJECTED:
-                return "Recusado";
-            case ERROR:
-                return "Erro";
-            default:
-                return status.toString();
-        }
+        return switch (status) {
+            case WAITING -> "A aguardar";
+            case TRANSFERRING -> "A transferir";
+            case DONE -> "Concluido";
+            case REJECTED -> "Recusado";
+            case ERROR -> "Erro";
+        };
     }
 
     private class FileDropHandler extends TransferHandler {
         @Override
-        public boolean canImport(TransferHandler.TransferSupport support) {
+        public boolean canImport(TransferSupport support) {
             return support.isDataFlavorSupported(DataFlavor.javaFileListFlavor);
         }
 
         @Override
         @SuppressWarnings("unchecked")
-        public boolean importData(TransferHandler.TransferSupport support) {
-            if (!canImport(support)) {
-                return false;
-            }
+        public boolean importData(TransferSupport support) {
+            if (!canImport(support)) return false;
             try {
                 List<File> dropped = (List<File>) support.getTransferable().getTransferData(DataFlavor.javaFileListFlavor);
                 addSelectedFiles(dropped);
@@ -333,9 +322,7 @@ public class MainFrame extends JFrame implements TransferListener {
 
             addMouseListener(new MouseAdapter() {
                 @Override
-                public void mouseClicked(MouseEvent e) {
-                    toggleSelected();
-                }
+                public void mouseClicked(MouseEvent e) { toggleSelected(); }
             });
         }
 
@@ -347,11 +334,8 @@ public class MainFrame extends JFrame implements TransferListener {
 
         void toggleSelected() {
             setSelected(!selected);
-            if (selected) {
-                selectedPeerIds.add(peerId);
-            } else {
-                selectedPeerIds.remove(peerId);
-            }
+            if (selected) selectedPeerIds.add(peerId);
+            else selectedPeerIds.remove(peerId);
             updateSendButtonState();
         }
 
@@ -362,7 +346,7 @@ public class MainFrame extends JFrame implements TransferListener {
         }
     }
 
-    private static class RoundedBorder implements Border {
+    static class RoundedBorder implements Border {
         private final Color color;
         private final int radius;
 
@@ -377,9 +361,7 @@ public class MainFrame extends JFrame implements TransferListener {
         }
 
         @Override
-        public boolean isBorderOpaque() {
-            return false;
-        }
+        public boolean isBorderOpaque() { return false; }
 
         @Override
         public void paintBorder(Component c, Graphics g, int x, int y, int width, int height) {
