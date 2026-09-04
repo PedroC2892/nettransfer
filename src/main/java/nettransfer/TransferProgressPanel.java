@@ -1,73 +1,99 @@
 package nettransfer;
 
-import javax.swing.BorderFactory;
-import javax.swing.JButton;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.JProgressBar;
-import java.awt.BorderLayout;
-import java.awt.Dimension;
-import java.awt.FlowLayout;
-import java.awt.Font;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
+import javafx.scene.Node;
+import javafx.scene.control.Button;
+import javafx.scene.control.Label;
+import javafx.scene.control.ProgressBar;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.VBox;
 
-public class TransferProgressPanel extends JPanel {
-    private final JProgressBar progressBar = new JProgressBar(0, 100);
-    private final JLabel detailLabel = new JLabel(" ");
-    private final JLabel statusLabel = new JLabel("A aguardar");
-    private final JButton openFolderButton;
+public class TransferProgressPanel {
+
+    private final VBox box;
+    private final ProgressBar progressBar;
+    private final Label pctLabel;
+    private final Label statusLabel;
+    private final Label detailLabel;
+    private final Button openBtn;
     private String receiveDir;
 
     public TransferProgressPanel(String peerName, String receiveDir) {
         this.receiveDir = receiveDir;
-        setLayout(new BorderLayout(8, 2));
-        setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
 
-        JLabel titleLabel = new JLabel(peerName);
-        titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD));
-        progressBar.setStringPainted(true);
+        box = new VBox(6);
+        box.getStyleClass().add("transfer-card");
 
-        openFolderButton = new JButton("Abrir pasta");
-        openFolderButton.setVisible(false);
-        openFolderButton.addActionListener(e -> {
-            if (this.receiveDir != null) MainFrame.openFolder(this.receiveDir);
-        });
+        // Top row: peer name + status
+        Label nameLabel = new Label(peerName);
+        nameLabel.getStyleClass().add("transfer-peer-name");
 
-        JPanel top = new JPanel(new BorderLayout(8, 0));
-        top.add(titleLabel, BorderLayout.WEST);
-        top.add(progressBar, BorderLayout.CENTER);
+        statusLabel = new Label("A aguardar");
+        statusLabel.getStyleClass().addAll("transfer-status");
 
-        JPanel right = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
-        right.add(statusLabel);
-        right.add(openFolderButton);
-        top.add(right, BorderLayout.EAST);
+        HBox spacer = new HBox();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        add(top, BorderLayout.NORTH);
-        add(detailLabel, BorderLayout.SOUTH);
-        setMaximumSize(new Dimension(Integer.MAX_VALUE, 60));
+        openBtn = new Button("📂 Abrir");
+        openBtn.getStyleClass().add("btn-secondary");
+        openBtn.setStyle("-fx-font-size:11px; -fx-padding: 3 10 3 10;");
+        openBtn.setVisible(false);
+        openBtn.setOnAction(e -> { if (this.receiveDir != null) MainController.openFolder(this.receiveDir); });
+
+        HBox topRow = new HBox(8, nameLabel, spacer, statusLabel, openBtn);
+        topRow.setAlignment(Pos.CENTER_LEFT);
+
+        // Progress bar row
+        progressBar = new ProgressBar(0);
+        progressBar.setMaxWidth(Double.MAX_VALUE);
+        progressBar.setPrefHeight(6);
+        progressBar.getStyleClass().add("progress-bar");
+
+        pctLabel = new Label("0%");
+        pctLabel.setStyle("-fx-font-size:12px; -fx-text-fill:#6c7a96;");
+
+        HBox progressRow = new HBox(10, progressBar, pctLabel);
+        progressRow.setAlignment(Pos.CENTER_LEFT);
+        HBox.setHgrow(progressBar, Priority.ALWAYS);
+
+        // Detail row
+        detailLabel = new Label("");
+        detailLabel.getStyleClass().add("transfer-detail");
+
+        box.getChildren().addAll(topRow, progressRow, detailLabel);
     }
+
+    public Node node() { return box; }
 
     public void setReceiveDir(String dir) {
         this.receiveDir = dir;
     }
 
     public void updateProgress(long transferred, long total, double speedBps) {
-        int pct = total > 0 ? (int) (transferred * 100 / total) : 0;
-        progressBar.setValue(pct);
-        progressBar.setString(pct + "%");
-        double speedMBs = speedBps / (1024.0 * 1024.0);
-        String eta = "--";
+        double pct = total > 0 ? (double) transferred / total : 0;
+        progressBar.setProgress(pct);
+        pctLabel.setText(String.format("%.0f%%", pct * 100));
+
+        double speedMB = speedBps / (1024.0 * 1024.0);
+        String eta = "—";
         if (speedBps > 0 && total > transferred) {
-            long remainingSec = (long) ((total - transferred) / speedBps);
-            eta = remainingSec + "s";
+            long secs = (long) ((total - transferred) / speedBps);
+            eta = secs < 60 ? secs + "s" : (secs / 60) + "m " + (secs % 60) + "s";
         }
-        detailLabel.setText(String.format("%s / %s  -  %.2f MB/s  -  ETA %s",
-                MainFrame.formatSize(transferred), MainFrame.formatSize(total), speedMBs, eta));
+        detailLabel.setText(String.format("%s / %s  ·  %.1f MB/s  ·  ~%s restantes",
+                MainController.formatSize(transferred),
+                MainController.formatSize(total),
+                speedMB, eta));
     }
 
-    public void setStatus(String status) {
-        statusLabel.setText(status);
-        // Show "Abrir pasta" button when transfer is done and we know where files landed
-        boolean done = "Concluido".equals(status);
-        openFolderButton.setVisible(done && receiveDir != null);
+    public void setStatus(String text, String styleClass) {
+        statusLabel.setText(text);
+        statusLabel.getStyleClass().removeAll("done", "error", "rejected", "normal");
+        statusLabel.getStyleClass().add(styleClass);
+        boolean done = "done".equals(styleClass);
+        openBtn.setVisible(done && receiveDir != null);
+        if (done) progressBar.setProgress(1.0);
     }
 }

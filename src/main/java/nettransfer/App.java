@@ -1,21 +1,25 @@
 package nettransfer;
 
-import javax.swing.SwingUtilities;
+import javafx.application.Application;
+import javafx.application.Platform;
+import javafx.scene.Scene;
+import javafx.scene.image.Image;
+import javafx.stage.Stage;
 
-public class Main {
-    public static void main(String[] args) throws Exception {
-        MainFrame mainFrame = new MainFrame();
+public class App extends Application {
 
-        ConnectionManager connectionManager = new ConnectionManager(mainFrame);
+    @Override
+    public void start(Stage stage) throws Exception {
+        MainController controller = new MainController(stage);
+
+        ConnectionManager connectionManager = new ConnectionManager(controller);
         connectionManager.start();
 
         DiscoveryService discoveryService = new DiscoveryService(connectionManager.getPort());
 
-        SwingUtilities.invokeLater(() -> mainFrame.setVisible(true));
-
         Thread receiverThread = new Thread(() -> {
             try {
-                discoveryService.broadcastReceiver(DiscoveryService.DISCOVERY_PORT, mainFrame::onPeerDiscovered);
+                discoveryService.broadcastReceiver(DiscoveryService.DISCOVERY_PORT, controller::onPeerDiscovered);
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -32,5 +36,11 @@ public class Main {
         });
         broadcastThread.setDaemon(true);
         broadcastThread.start();
+
+        controller.show();
+    }
+
+    public static void main(String[] args) {
+        launch(args);
     }
 }

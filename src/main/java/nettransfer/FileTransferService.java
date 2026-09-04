@@ -2,7 +2,6 @@ package nettransfer;
 
 import com.google.gson.Gson;
 
-import javax.swing.SwingUtilities;
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.DataInputStream;
@@ -12,6 +11,8 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.file.Files;
@@ -24,8 +25,9 @@ import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import javafx.application.Platform;
+
 public class FileTransferService {
-    private static final int CHUNK_SIZE = 64 * 1024;
     private static final long PROGRESS_INTERVAL_MS = 150;
 
     static final Path DOWNLOAD_BASE = Paths.get(System.getProperty("user.home"), "Downloads", "NetTransfer");
@@ -53,8 +55,15 @@ public class FileTransferService {
 
             try (Socket socket = new Socket()) {
                 socket.connect(new InetSocketAddress(peer.ipAddress, peer.tcpPort), 5000);
-                DataOutputStream out = new DataOutputStream(new BufferedOutputStream(socket.getOutputStream()));
-                DataInputStream in = new DataInputStream(new BufferedInputStream(socket.getInputStream()));
+
+                // ECDH handshake — sender goes first
+                Handshake hs = Handshake.forSender(socket.getInputStream(), socket.getOutputStream());
+
+                // All further I/O is encrypted
+                OutputStream encOut = new EncryptedOutputStream(socket.getOutputStream(), hs);
+                InputStream encIn = new EncryptedInputStream(socket.getInputStream(), hs);
+                DataOutputStream out = new DataOutputStream(new BufferedOutputStream(encOut));
+                DataInputStream in = new DataInputStream(new BufferedInputStream(encIn));
 
                 TransferMessage.transferRequest(transferId, senderName, fileEntries, totalSize, totalFiles).writeTo(out, gson);
 
@@ -68,7 +77,7 @@ public class FileTransferService {
                 long transferred = 0;
                 long startTime = System.currentTimeMillis();
                 long lastCallback = 0;
-                byte[] buffer = new byte[CHUNK_SIZE];
+                byte[] buffer = new byte[64 * 1024];
 
                 for (PreparedFile entry : entries) {
                     if (entry.isDirectory) {
@@ -105,16 +114,17 @@ public class FileTransferService {
         Gson gson = new Gson();
         TransferMessage request = null;
         try {
-            DataInputStream in = new DataInputStream(new BufferedInputStream(socket.getInputStream()));
-            DataOutputStream out = new DataOutputStream(new BufferedOutputStream(socket.getOutputStream()));
+            // ECDH handshake — receiver goes second
+            Handshake hs = Handshake.forReceiver(socket.getInputStream(), socket.getOutputStream());
+
+            InputStream encIn = new EncryptedInputStream(socket.getInputStream(), hs);
+            OutputStream encOut = new EncryptedOutputStream(socket.getOutputStream(), hs);
+            DataInputStream in = new DataInputStream(new BufferedInputStream(encIn));
+            DataOutputStream out = new DataOutputStream(new BufferedOutputStream(encOut));
 
             request = TransferMessage.readFrom(in, gson);
             final TransferMessage finalRequest = request;
-            boolean[] acceptedHolder = {false};
-            SwingUtilities.invokeAndWait(() -> acceptedHolder[0] = listener.onIncomingRequest(
-                    finalRequest.transferId, finalRequest.senderName, finalRequest.files,
-                    finalRequest.totalSize, finalRequest.totalFiles));
-            boolean accepted = acceptedHolder[0];
+            boolean accepted = waitForUiResponse(listener, finalRequest);
 
             TransferMessage.transferResponse(request.transferId, accepted).writeTo(out, gson);
             if (!accepted) {
@@ -124,7 +134,6 @@ public class FileTransferService {
 
             listener.onStatusChange(request.transferId, TransferStatus.TRANSFERRING);
 
-            // Each transfer gets its own timestamped subfolder
             String timestamp = LocalDateTime.now().format(FOLDER_FMT);
             Path destBase = DOWNLOAD_BASE.resolve(timestamp).toAbsolutePath().normalize();
             Files.createDirectories(destBase);
@@ -133,7 +142,7 @@ public class FileTransferService {
             long transferred = 0;
             long startTime = System.currentTimeMillis();
             long lastCallback = 0;
-            byte[] buffer = new byte[CHUNK_SIZE];
+            byte[] buffer = new byte[64 * 1024];
 
             while (true) {
                 TransferMessage msg = TransferMessage.readFrom(in, gson);
@@ -141,9 +150,7 @@ public class FileTransferService {
                     listener.onStatusChange(request.transferId, TransferStatus.DONE);
                     break;
                 }
-                if (!"FILE_START".equals(msg.type)) {
-                    continue;
-                }
+                if (!"FILE_START".equals(msg.type)) continue;
 
                 Path target = resolveSafePath(destBase, msg.relativePath);
                 if (msg.isDirectory) {
@@ -158,9 +165,7 @@ public class FileTransferService {
                     while (remaining > 0) {
                         int toRead = (int) Math.min(buffer.length, remaining);
                         int read = in.read(buffer, 0, toRead);
-                        if (read == -1) {
-                            throw new EOFException("Ligacao fechada durante a transferencia");
-                        }
+                        if (read == -1) throw new EOFException("Ligacao fechada durante a transferencia");
                         fos.write(buffer, 0, read);
                         remaining -= read;
                         transferred += read;
@@ -182,11 +187,28 @@ public class FileTransferService {
         }
     }
 
+    private static boolean waitForUiResponse(TransferListener listener, TransferMessage request) {
+        // The listener.onIncomingRequest blocks via a modal JavaFX dialog on the FX thread,
+        // but we're on a background thread. We use a CountDownLatch pattern via the holder array.
+        boolean[] result = {false};
+        java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
+        Platform.runLater(() -> {
+            result[0] = listener.onIncomingRequest(
+                    request.transferId, request.senderName, request.files,
+                    request.totalSize, request.totalFiles);
+            latch.countDown();
+        });
+        try {
+            latch.await();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        return result[0];
+    }
+
     private static Path resolveSafePath(Path base, String relativePath) throws IOException {
         Path resolved = base.resolve(relativePath).normalize();
-        if (!resolved.startsWith(base)) {
-            throw new IOException("Path traversal detetado: " + relativePath);
-        }
+        if (!resolved.startsWith(base)) throw new IOException("Path traversal detetado: " + relativePath);
         return resolved;
     }
 

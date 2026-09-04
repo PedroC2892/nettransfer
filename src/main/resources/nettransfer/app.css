@@ -1,0 +1,322 @@
+/* NetTransfer — dark modern theme */
+
+.root {
+    -fx-background-color: #1a1a2e;
+    -fx-font-family: "Inter", "Segoe UI", "SF Pro Display", sans-serif;
+    -fx-font-size: 13px;
+    -fx-text-fill: #e8e8e8;
+}
+
+/* ── Top bar ── */
+.top-bar {
+    -fx-background-color: #16213e;
+    -fx-padding: 14 20 14 20;
+    -fx-border-color: #0f3460;
+    -fx-border-width: 0 0 1 0;
+}
+
+.app-title {
+    -fx-font-size: 18px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #e94560;
+}
+
+.section-label {
+    -fx-font-size: 11px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #6c7a96;
+    -fx-padding: 16 0 8 0;
+}
+
+/* ── Device cards ── */
+.device-card {
+    -fx-background-color: #16213e;
+    -fx-background-radius: 12;
+    -fx-border-color: #0f3460;
+    -fx-border-width: 1.5;
+    -fx-border-radius: 12;
+    -fx-padding: 16 20 16 20;
+    -fx-cursor: hand;
+    -fx-pref-width: 180;
+    -fx-pref-height: 100;
+}
+
+.device-card:hover {
+    -fx-background-color: #1a2a50;
+    -fx-border-color: #3a5a9a;
+    -fx-effect: dropshadow(gaussian, rgba(233,69,96,0.15), 10, 0, 0, 0);
+}
+
+.device-card.selected {
+    -fx-background-color: #1a2a50;
+    -fx-border-color: #e94560;
+    -fx-border-width: 2;
+    -fx-effect: dropshadow(gaussian, rgba(233,69,96,0.35), 14, 0, 0, 0);
+}
+
+.card-name {
+    -fx-font-size: 14px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #e8e8e8;
+}
+
+.card-host {
+    -fx-font-size: 12px;
+    -fx-text-fill: #8a9bb5;
+}
+
+.card-ip {
+    -fx-font-size: 11px;
+    -fx-text-fill: #6c7a96;
+}
+
+.card-icon {
+    -fx-font-size: 22px;
+    -fx-text-fill: #e94560;
+}
+
+.card-selected-check {
+    -fx-text-fill: #e94560;
+    -fx-font-size: 14px;
+}
+
+/* ── Empty state ── */
+.empty-label {
+    -fx-text-fill: #4a5568;
+    -fx-font-size: 14px;
+}
+
+/* ── Buttons ── */
+.btn-primary {
+    -fx-background-color: #e94560;
+    -fx-text-fill: white;
+    -fx-background-radius: 8;
+    -fx-padding: 8 20 8 20;
+    -fx-font-weight: bold;
+    -fx-cursor: hand;
+    -fx-border-width: 0;
+}
+
+.btn-primary:hover {
+    -fx-background-color: #c73652;
+}
+
+.btn-primary:disabled {
+    -fx-background-color: #3a2030;
+    -fx-text-fill: #6c3040;
+}
+
+.btn-secondary {
+    -fx-background-color: #16213e;
+    -fx-text-fill: #a0b0cc;
+    -fx-background-radius: 8;
+    -fx-border-color: #2a3a5a;
+    -fx-border-radius: 8;
+    -fx-border-width: 1;
+    -fx-padding: 8 16 8 16;
+    -fx-cursor: hand;
+}
+
+.btn-secondary:hover {
+    -fx-background-color: #1e2d50;
+    -fx-text-fill: #e8e8e8;
+    -fx-border-color: #4a6a9a;
+}
+
+/* ── Drop zone ── */
+.drop-zone {
+    -fx-background-color: #0f1a30;
+    -fx-background-radius: 10;
+    -fx-border-color: #2a3a5a;
+    -fx-border-radius: 10;
+    -fx-border-width: 2;
+    -fx-border-style: dashed;
+    -fx-padding: 24;
+    -fx-cursor: hand;
+}
+
+.drop-zone.drag-over {
+    -fx-border-color: #e94560;
+    -fx-background-color: #1a1030;
+}
+
+.drop-zone-label {
+    -fx-text-fill: #4a5568;
+    -fx-font-size: 13px;
+}
+
+/* ── Bottom bar ── */
+.bottom-bar {
+    -fx-background-color: #16213e;
+    -fx-padding: 12 20 12 20;
+    -fx-border-color: #0f3460;
+    -fx-border-width: 1 0 0 0;
+    -fx-spacing: 10;
+}
+
+.files-label {
+    -fx-text-fill: #8a9bb5;
+    -fx-font-size: 12px;
+}
+
+/* ── Progress panels ── */
+.progress-area {
+    -fx-background-color: #0f1a30;
+    -fx-padding: 0;
+}
+
+.transfer-card {
+    -fx-background-color: #16213e;
+    -fx-background-radius: 10;
+    -fx-border-color: #0f3460;
+    -fx-border-radius: 10;
+    -fx-border-width: 1;
+    -fx-padding: 14 18 14 18;
+    -fx-spacing: 8;
+}
+
+.transfer-peer-name {
+    -fx-font-weight: bold;
+    -fx-text-fill: #e8e8e8;
+    -fx-font-size: 13px;
+}
+
+.transfer-status {
+    -fx-font-size: 11px;
+    -fx-text-fill: #8a9bb5;
+}
+
+.transfer-status.done {
+    -fx-text-fill: #48bb78;
+}
+
+.transfer-status.error {
+    -fx-text-fill: #fc8181;
+}
+
+.transfer-status.rejected {
+    -fx-text-fill: #f6ad55;
+}
+
+.transfer-detail {
+    -fx-font-size: 12px;
+    -fx-text-fill: #6c7a96;
+}
+
+.progress-bar {
+    -fx-pref-height: 6;
+    -fx-background-radius: 3;
+    -fx-accent: #e94560;
+}
+
+.progress-bar .bar {
+    -fx-background-color: #e94560;
+    -fx-background-radius: 3;
+    -fx-background-insets: 0;
+}
+
+.progress-bar .track {
+    -fx-background-color: #0f3460;
+    -fx-background-radius: 3;
+    -fx-background-insets: 0;
+}
+
+/* ── Transfer request dialog ── */
+.dialog-root {
+    -fx-background-color: #1a1a2e;
+}
+
+.dialog-header {
+    -fx-background-color: #16213e;
+    -fx-padding: 20 24 20 24;
+    -fx-border-color: #0f3460;
+    -fx-border-width: 0 0 1 0;
+}
+
+.dialog-title {
+    -fx-font-size: 16px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #e8e8e8;
+}
+
+.dialog-sender {
+    -fx-font-size: 13px;
+    -fx-text-fill: #8a9bb5;
+}
+
+.file-entry {
+    -fx-padding: 6 0 6 0;
+    -fx-border-color: transparent transparent #0f3460 transparent;
+    -fx-border-width: 1;
+}
+
+.file-entry-name {
+    -fx-text-fill: #c8d8f0;
+    -fx-font-size: 13px;
+}
+
+.file-entry-size {
+    -fx-text-fill: #6c7a96;
+    -fx-font-size: 12px;
+}
+
+.summary-box {
+    -fx-background-color: #0f1a30;
+    -fx-background-radius: 8;
+    -fx-padding: 12 16 12 16;
+}
+
+.summary-text {
+    -fx-text-fill: #8a9bb5;
+    -fx-font-size: 13px;
+}
+
+/* ── ScrollPane ── */
+.scroll-pane {
+    -fx-background-color: transparent;
+    -fx-background: transparent;
+}
+
+.scroll-pane > .viewport {
+    -fx-background-color: transparent;
+}
+
+.scroll-bar:vertical .track,
+.scroll-bar:horizontal .track {
+    -fx-background-color: #0f1a30;
+}
+
+.scroll-bar .thumb {
+    -fx-background-color: #2a3a5a;
+    -fx-background-radius: 4;
+}
+
+.scroll-bar .thumb:hover {
+    -fx-background-color: #3a5a9a;
+}
+
+.scroll-bar .increment-button,
+.scroll-bar .decrement-button {
+    -fx-background-color: transparent;
+    -fx-padding: 0;
+}
+
+/* ── Divider ── */
+.separator .line {
+    -fx-border-color: #0f3460;
+}
+
+/* ── Encryption badge ── */
+.lock-badge {
+    -fx-background-color: #0f2a1a;
+    -fx-background-radius: 6;
+    -fx-border-color: #1a5a30;
+    -fx-border-radius: 6;
+    -fx-border-width: 1;
+    -fx-padding: 3 8 3 8;
+}
+
+.lock-badge-text {
+    -fx-font-size: 11px;
+    -fx-text-fill: #48bb78;
+}
