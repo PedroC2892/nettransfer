@@ -111,7 +111,6 @@ public class FileTransferService {
             TransferMessage.transferResponse(request.transferId, accepted).writeTo(out, gson);
             if (!accepted) {
                 listener.onStatusChange(request.transferId, TransferStatus.REJECTED);
-                socket.close();
                 return;
             }
 
@@ -163,10 +162,14 @@ public class FileTransferService {
                 }
                 TransferMessage.readFrom(in, gson);
             }
-            socket.close();
         } catch (Exception e) {
             String id = request != null ? request.transferId : "desconhecido";
             listener.onStatusChange(id, TransferStatus.ERROR);
+        } finally {
+            try {
+                socket.close();
+            } catch (IOException ignored) {
+            }
         }
     }
 
