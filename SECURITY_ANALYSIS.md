@@ -324,3 +324,90 @@ o modelo de ameaça atual e as suas limitações.
 Nenhuma das correções propostas exige alterar a arquitetura da aplicação — todas são
 localizadas em `DiscoveryService`, `Handshake`, `EncryptedInputStream`,
 `FileTransferService` e `ConnectionManager`.
+
+---
+
+## 6. Correções implementadas
+
+Todos os pontos das secções 1 a 3 foram corrigidos. Resumo por área:
+
+### 6.1 Múltiplas interfaces de rede
+
+- `NetworkInterfaceInfo.enumerate()` lista todas as interfaces up, não-loopback, com
+  endereço IPv4 e broadcast próprio.
+- `DiscoveryService.broadcastDiscovery()` reenumera as interfaces a cada ciclo e envia
+  um pacote por interface ativada, associando o `DatagramSocket` ao endereço local dessa
+  interface antes de enviar — o pacote sai mesmo pela NIC certa, com o endereço de
+  broadcast da própria subnet (não `255.255.255.255`).
+- Nova aba **Settings** (`Ctrl+3`) permite ativar/desativar interfaces individualmente;
+  a escolha é persistida em `~/.config/nettransfer/settings.json` via `AppSettings` e
+  aplicada no ciclo de broadcast seguinte.
+- A lista de interfaces é registada no log sempre que muda (arranque ou hotplug).
+
+### 6.2 Espaço em disco insuficiente
+
+- `FileTransferService.handleIncoming()` calcula `Files.getFileStore(...).getUsableSpace()`
+  antes de mostrar o diálogo de aceitação e exige `totalSize + 100 MB` de margem.
+- O `TransferRequestDialog` mostra o aviso "Not enough space — needs X, Y available" e
+  desativa o botão Aceitar (incluindo a tecla Enter) quando não há espaço suficiente —
+  só é possível recusar.
+- Todos os ficheiros escritos numa transferência são rastreados; se a transferência falhar
+  a meio, são todos apagados e a pasta com timestamp é removida se ficar vazia. A limpeza
+  é registada no log (número de ficheiros e bytes libertados).
+- No emissor, cada ficheiro selecionado é verificado (`exists`/`canRead`) antes de ligar
+  ao peer — falha rápida com motivo registado em vez de erro a meio da transferência.
+
+### 6.3 Falha crítica — sem autenticação (MITM)
+
+- `Handshake` calcula um **código de verificação de 6 dígitos** a partir das duas chaves
+  públicas efémeras (ordenadas lexicograficamente, concatenadas, expandidas por HKDF).
+  É mostrado no ecrã do emissor (cartão de transferência) e do recetor (diálogo de
+  pedido), com a indicação "Verification code — must match on both devices". Se os
+  números não baterem certo em ambos os dispositivos, há um atacante no meio.
+
+### 6.4 Chave derivada sem KDF adequado
+
+- A derivação SHA-256 direta foi substituída por **HKDF-SHA256** (RFC 5869), implementado
+  manualmente com `javax.crypto.Mac`/`HmacSHA256` (sem dependências externas). A chave
+  AES-256 usa o info string `"NetTransfer v1 file transfer"`; o código de verificação usa
+  um `info` separado (`"NetTransfer v1 verification"`), garantindo independência
+  criptográfica entre os dois.
+
+### 6.5 Sem validação da chave pública recebida
+
+- `Handshake` valida explicitamente a chave EC recebida: confirma que é do tipo `ECPublicKey`,
+  que os parâmetros da curva coincidem com secp256r1 (primo, `a`, `b`, ordem, cofator,
+  gerador), que o ponto não é o ponto no infinito, e que satisfaz
+  `y² ≡ x³ + ax + b (mod p)`. Falhas lançam `SecurityException` e são registadas como
+  evento de segurança no log.
+
+### 6.6 Records reordenáveis / removíveis
+
+- O IV aleatório foi substituído por um **nonce sequencial determinístico**: 4 bytes de
+  prefixo por sessão (derivado por HKDF, com separação por direção emissor→recetor e
+  recetor→emissor para nunca reutilizar o mesmo par chave+IV) + 8 bytes de contador
+  big-endian. O IV deixou de ser transmitido — o record passou a
+  `[4 bytes de tamanho][ciphertext+tag]`, poupando 12 bytes por bloco. Qualquer
+  reordenação, replay ou omissão de um record faz a autenticação GCM falhar de imediato.
+
+### 6.7 Superfície de ataque do lado do recetor
+
+- `EncryptedInputStream.readNextRecord()` rejeita tamanhos de record negativos, zero ou
+  superiores a `MAX_RECORD_SIZE` (1 MB), eliminando o DoS por `OutOfMemoryError`.
+- `ConnectionManager` limita a 8 ligações simultâneas com um `Semaphore`, usa um
+  `Executors.newFixedThreadPool(8)` em vez de uma thread por ligação, e define um
+  timeout de leitura de socket de 30 segundos — um peer parado já não ocupa um slot
+  indefinidamente. Ligações a mais são fechadas de imediato e registadas no log.
+- `DiscoveryService.broadcastReceiver()` aplica um limite de 10 pacotes por IP em cada
+  janela de 10 segundos (sliding window) e valida a mensagem recebida: `id`, `userName`
+  e `hostName` não podem ser nulos, vazios ou ter mais de 256 caracteres, e `tcpPort` tem
+  de estar entre 1024 e 65535.
+
+### 6.8 Sem verificação de integridade fim-a-fim
+
+- O emissor calcula SHA-256 incrementalmente enquanto envia cada ficheiro e inclui o
+  digest hexadecimal na mensagem `FILE_END`. O recetor calcula o seu próprio SHA-256
+  enquanto escreve e compara com o valor recebido; em caso de divergência apaga o
+  ficheiro, regista o erro de integridade (ambos os hashes) e falha a transferência.
+  Nenhum ficheiro é armazenado em memória para o cálculo — o `MessageDigest` é
+  atualizado por bloco de 64 KB.

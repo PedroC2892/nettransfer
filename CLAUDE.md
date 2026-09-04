@@ -1,75 +1,59 @@
 # NetTransfer — Java LAN File Transfer App
 
-## Architecture Overview
+## Stack
 
-NetTransfer is a Java 17 + Swing application for peer discovery and file transfer on a local network.
+- Java 17, JavaFX 21 (NOT Swing — migrated), Gson 2.11.0, Maven
+- Run: `mvn javafx:run`  ·  Build: `mvn package`
+- Entry point: `nettransfer.App`
 
-### Existing files
+## Architecture
 
-- `Main.java` — Entry point. Starts DiscoveryService and PeerListFrame.
-- `Peer.java` — Peer model: id, name, hostName, ipAddress, tcpPort.
-- `DiscoveryMessage.java` — UDP broadcast message: type, id, userName, hostName, tcpPort.
-- `DiscoveryService.java` — UDP broadcast/receive on port 54321, 5s interval. Uses Gson for JSON.
-- `ConnectionManager.java` — Empty. Intended for TCP connection management.
-- `FileTransferService.java` — Empty. Intended for file transfer logic.
-- `PeerListFrame.java` — Basic Swing JTable showing discovered peers.
+- `App.java` — JavaFX Application. Starts ConnectionManager, DiscoveryService, MainController.
+- `MainController.java` — All UI. Tab-based: Devices / Logs / Settings. Full-screen overlay during transfers.
+- `Peer.java` — id, name, hostName, ipAddress, tcpPort
+- `DiscoveryMessage.java` — UDP broadcast payload
+- `DiscoveryService.java` — UDP broadcast/receive, port 54321, 5s interval, per-interface send, rate-limited receive
+- `NetworkInterfaceInfo.java` — model + enumeration of usable network interfaces
+- `AppSettings.java` — persists enabled interfaces to ~/.config/nettransfer/settings.json
+- `ConnectionManager.java` — TCP ServerSocket(0), bounded thread pool (max 8 concurrent), 30s socket timeout
+- `FileTransferService.java` — send/receive, 64KB chunks, streaming, disk space checks, partial cleanup, per-file SHA-256
+- `Handshake.java` — ECDH P-256 ephemeral → HKDF-SHA256 (key, verification code, nonce prefixes), public key validation
+- `EncryptedOutputStream` / `EncryptedInputStream` — AES-256-GCM records with sequential nonce, bounded record size
+- `TransferMessage.java` — length-prefixed JSON protocol
+- `TransferLogger.java` — writes to ~/Downloads/NetTransfer/nettransfer.log
+- `TransferStatus.java` — WAITING, TRANSFERRING, DONE, REJECTED, ERROR
+- `TransferListener.java` — callback interface
+- `app.css` in src/main/resources/nettransfer/ — monochromatic dark theme
 
-### Dependencies
+## UI conventions (IMPORTANT — user is particular about these)
 
-- Java 17
-- Gson 2.11.0 (via Maven)
-- Swing (standard library)
+- **Monochromatic only.** Blacks #111111/#1a1a1a, greys #2a2a2a/#555/#888/#aaa/#ccc, white #f0f0f0.
+  NO colours, NO accent hues, NO green/red/orange status colours.
+- **All UI text in English.**
+- **Keyboard-first.** Every clickable thing must have a keyboard binding, shown in the
+  button label as `[Key]` e.g. `Send  [Ctrl+S]`.
+- Minimal, no clutter, no badges, no decorative metadata.
+- No drag-and-drop zone (removed deliberately).
 
-### Network
+## Existing keybinds
 
-- UDP port 54321 — discovery broadcasts
-- TCP — file transfer (port to be assigned, included in discovery message)
-
-## What needs to be implemented
-
-### Core (mandatory)
-1. TCP server in each instance (fixed or dynamic port, published in broadcasts)
-2. Transfer request protocol: sender → metadata → receiver accepts/rejects → data flows
-3. File transfer over TCP: streaming (no full-file-in-memory), chunked, with progress
-4. Directory transfer preserving structure
-5. Received files saved to `~/Downloads/NetTransfer/` (Linux convention)
-6. Path traversal protection: never write outside the destination directory
-7. Duplicate file handling: rename with suffix if file exists
-
-### GUI (mandatory)
-- Device cards instead of table (JPanel grid, one card per peer)
-- Multi-selection of devices (click to select/deselect, visual highlight)
-- Send files button (enabled when ≥1 device selected and files chosen)
-- File selection: drag & drop + file chooser button (supports files and directories)
-- Transfer request dialog on receiver: shows sender, file names/types/count/total size, Accept/Reject
-- Transfer progress panel: progress bar, percentage, speed (MB/s), transferred/total, ETA, status
-- Per-device status when sending to multiple peers: waiting / transferring / done / rejected / error
-- Non-blocking GUI during transfers (all network work on background threads)
-
-### Robustness
-- Handle disconnected peer during transfer gracefully
-- Handle rejected transfer
-- Handle connection errors
-- Handle write errors (disk full, permissions)
-- Don't crash if one peer transfer fails; continue others
+- `Ctrl+1` Devices tab · `Ctrl+2` Logs tab · `Ctrl+3` Settings tab
+- `←/→/↑/↓` navigate + select device cards · `Shift+arrow` extend selection
+- `Enter` / `Space` toggle focused card · `Ctrl+A` select all
+- `F` file chooser · `Ctrl+S` send · `Esc` clear selection
+- `Ctrl+D` open downloads folder · `Ctrl+L` open log file (logs tab)
+- Overlay: `O` open folder · `Esc` close (when all transfers finished)
+- Logs: arrows/PgUp/PgDn/Home/End scroll · `Ctrl+F` search · `Ctrl +/-/0` zoom
+- Settings: `←/→/↑/↓` navigate interface rows · `Enter`/`Space` toggle row ·
+  `Ctrl+A` select all · `Ctrl+Shift+A` deselect all
 
 ## Code style
 
-- Follow existing style (public fields on Peer/DiscoveryMessage, Gson for JSON)
-- Keep code simple and clean — no unnecessary comments
-- No new layers or abstractions beyond what is clearly needed
-- Use standard Java Swing patterns (SwingUtilities.invokeLater for UI updates)
-- All network/IO on background threads, never on EDT
-
-## Build & run
-
-```
-mvn package -q
-java -jar target/gson-1.0-SNAPSHOT.jar
-# or with Maven exec plugin (if configured)
-mvn compile exec:java -Dexec.mainClass=nettransfer.Main
-```
+- Simple and clean. No excessive comments.
+- No new layers or abstractions unless clearly needed.
+- All network/IO on background threads. UI updates via `Platform.runLater`.
+- Follow existing patterns (public fields on Peer/DiscoveryMessage, Gson for JSON).
 
 ## Git
 
-Commit after each significant implementation. Verify build before committing.
+Commit after each coherent implementation. Verify `mvn compile` passes before committing.
