@@ -11,8 +11,6 @@ import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
-import javafx.scene.input.Dragboard;
-import javafx.scene.input.TransferMode;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
@@ -54,7 +52,6 @@ public class MainController implements TransferListener {
     private Label filesLabel;
     private Button sendButton;
     private VBox progressContainer;
-    private Label dropLabel;
 
     public MainController(Stage stage) {
         this.stage = stage;
@@ -141,34 +138,6 @@ public class MainController implements TransferListener {
     private Node buildBottom() {
         VBox bottom = new VBox(0);
 
-        // Drop zone
-        VBox dropZone = new VBox();
-        dropZone.getStyleClass().add("drop-zone");
-        dropZone.setAlignment(Pos.CENTER);
-        dropZone.setPadding(new Insets(20));
-        dropLabel = new Label("Arraste ficheiros ou pastas para aqui");
-        dropLabel.getStyleClass().add("drop-zone-label");
-        dropZone.getChildren().add(dropLabel);
-        VBox.setMargin(dropZone, new Insets(0, 20, 0, 20));
-
-        dropZone.setOnDragOver(e -> {
-            if (e.getDragboard().hasFiles()) {
-                e.acceptTransferModes(TransferMode.COPY);
-                dropZone.getStyleClass().add("drag-over");
-            }
-            e.consume();
-        });
-        dropZone.setOnDragExited(e -> dropZone.getStyleClass().remove("drag-over"));
-        dropZone.setOnDragDropped(e -> {
-            Dragboard db = e.getDragboard();
-            if (db.hasFiles()) {
-                addSelectedFiles(db.getFiles());
-                e.setDropCompleted(true);
-            }
-            dropZone.getStyleClass().remove("drag-over");
-            e.consume();
-        });
-
         // Buttons row
         Button chooseBtn = new Button("Selecionar ficheiros");
         chooseBtn.getStyleClass().add("btn-secondary");
@@ -185,18 +154,18 @@ public class MainController implements TransferListener {
 
         filesLabel = new Label("Nenhum ficheiro selecionado");
         filesLabel.getStyleClass().add("files-label");
+
         HBox spacer = new HBox();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        HBox btnRow = new HBox(10);
+        HBox btnRow = new HBox(10, chooseBtn, sendButton, spacer, openDownloadsBtn);
         btnRow.setAlignment(Pos.CENTER_LEFT);
-        btnRow.getChildren().addAll(chooseBtn, sendButton, spacer, openDownloadsBtn);
 
         HBox bottomBar = new HBox(12);
         bottomBar.getStyleClass().add("bottom-bar");
         bottomBar.setAlignment(Pos.CENTER_LEFT);
 
-        VBox leftBar = new VBox(8, btnRow, filesLabel);
+        VBox leftBar = new VBox(6, btnRow, filesLabel);
         leftBar.setAlignment(Pos.CENTER_LEFT);
         HBox.setHgrow(leftBar, Priority.ALWAYS);
 
@@ -217,8 +186,8 @@ public class MainController implements TransferListener {
         progressScroll.getStyleClass().add("scroll-pane");
         progressScroll.setStyle("-fx-border-width:0;");
 
-        bottom.getChildren().addAll(dropZone, new VBox(4), bottomBar, progressLabel, progressScroll);
-        VBox.setMargin(dropZone, new Insets(10, 20, 0, 20));
+        bottom.getChildren().addAll(bottomBar, progressLabel, progressScroll);
+        VBox.setMargin(bottomBar, new Insets(10, 0, 0, 0));
         return bottom;
     }
 
@@ -348,22 +317,16 @@ public class MainController implements TransferListener {
     public boolean onIncomingRequest(String transferId, String senderName, String senderIp,
                                      List<TransferMessage.FileEntry> files,
                                      long totalSize, int totalFiles) {
+        // Already on the FX thread (called via Platform.runLater in waitForUiResponse).
+        // Show the dialog directly — never nest another runLater/await here.
         TransferProgressPanel panel = new TransferProgressPanel(
                 senderName, null, senderIp, "RECEBER", files, totalSize);
         progressPanels.put(transferId, panel);
-        Platform.runLater(() -> progressContainer.getChildren().add(0, panel.node()));
+        progressContainer.getChildren().add(0, panel.node());
 
-        boolean[] result = {false};
-        java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
-        Platform.runLater(() -> {
-            TransferRequestDialog dlg = new TransferRequestDialog(stage, senderName, senderIp, files, totalSize, totalFiles);
-            result[0] = dlg.showAndWait();
-            latch.countDown();
-        });
-        try { latch.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-
-        boolean accepted = result[0];
-        Platform.runLater(() -> panel.setStatus(accepted ? "A receber..." : "Recusado", accepted ? "normal" : "rejected"));
+        TransferRequestDialog dlg = new TransferRequestDialog(stage, senderName, senderIp, files, totalSize, totalFiles);
+        boolean accepted = dlg.showAndWait();
+        panel.setStatus(accepted ? "A receber..." : "Recusado", accepted ? "normal" : "rejected");
         return accepted;
     }
 
