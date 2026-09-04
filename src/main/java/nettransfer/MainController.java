@@ -11,6 +11,8 @@ import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
+import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyEvent;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.HBox;
@@ -41,16 +43,16 @@ public class MainController implements TransferListener {
 
     private final Map<String, Peer> peers = new LinkedHashMap<>();
     private final Map<String, Long> lastSeen = new HashMap<>();
-    private final Map<String, DeviceCard> cards = new HashMap<>();
+    private final Map<String, DeviceCard> cards = new LinkedHashMap<>();
     private final Set<String> selectedPeerIds = new LinkedHashSet<>();
     private final List<File> selectedFiles = new ArrayList<>();
     private final Map<String, TransferProgressPanel> progressPanels = new ConcurrentHashMap<>();
 
-    // UI nodes
     private FlowPane cardsPane;
     private Label emptyLabel;
     private Label filesLabel;
     private Button sendButton;
+    private Button chooseButton;
     private VBox progressContainer;
 
     public MainController(Stage stage) {
@@ -65,41 +67,70 @@ public class MainController implements TransferListener {
         root.setCenter(buildCenter());
         root.setBottom(buildBottom());
 
-        Scene scene = new Scene(root, 920, 680);
+        Scene scene = new Scene(root, 860, 620);
         scene.getStylesheets().add(getClass().getResource("app.css").toExternalForm());
         stage.setTitle("NetTransfer");
         stage.setScene(scene);
-        stage.setMinWidth(700);
-        stage.setMinHeight(500);
+        stage.setMinWidth(600);
+        stage.setMinHeight(450);
         stage.show();
+
+        // Global keyboard shortcuts
+        scene.addEventFilter(KeyEvent.KEY_PRESSED, this::handleGlobalKey);
 
         Timeline peerCleanup = new Timeline(new KeyFrame(Duration.seconds(5), e -> removeStalePeers()));
         peerCleanup.setCycleCount(Animation.INDEFINITE);
         peerCleanup.play();
     }
 
+    private void handleGlobalKey(KeyEvent e) {
+        switch (e.getCode()) {
+            case F -> { chooseFiles(); e.consume(); }
+            case ENTER -> {
+                if (!sendButton.isDisabled()) { sendToSelected(); e.consume(); }
+            }
+            case ESCAPE -> { selectedFiles.clear(); filesLabel.setText("Nenhum ficheiro selecionado"); updateSendButton(); e.consume(); }
+            case LEFT, RIGHT, UP, DOWN -> navigateCards(e.getCode());
+            case A -> {
+                if (e.isControlDown()) { selectAllCards(); e.consume(); }
+            }
+            default -> {}
+        }
+    }
+
+    private void navigateCards(KeyCode dir) {
+        List<DeviceCard> cardList = new ArrayList<>(cards.values());
+        if (cardList.isEmpty()) return;
+        int current = -1;
+        for (int i = 0; i < cardList.size(); i++) {
+            if (cardList.get(i).isFocused()) { current = i; break; }
+        }
+        int next;
+        if (current == -1) {
+            next = 0;
+        } else if (dir == KeyCode.RIGHT || dir == KeyCode.DOWN) {
+            next = Math.min(current + 1, cardList.size() - 1);
+        } else {
+            next = Math.max(current - 1, 0);
+        }
+        cardList.get(next).focus();
+    }
+
+    private void selectAllCards() {
+        for (DeviceCard card : cards.values()) card.setSelected(true);
+        selectedPeerIds.addAll(cards.keySet());
+        updateSendButton();
+    }
+
     private HBox buildTopBar() {
         HBox bar = new HBox();
         bar.getStyleClass().add("top-bar");
         bar.setAlignment(Pos.CENTER_LEFT);
-        bar.setSpacing(12);
 
         Label title = new Label("NetTransfer");
         title.getStyleClass().add("app-title");
 
-        HBox spacer = new HBox();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
-
-        HBox lockBadge = new HBox(4);
-        lockBadge.getStyleClass().add("lock-badge");
-        lockBadge.setAlignment(Pos.CENTER);
-        Label lockIcon = new Label("🔒");
-        lockIcon.setStyle("-fx-font-size:11px;");
-        Label lockText = new Label("ECDH · AES-256-GCM");
-        lockText.getStyleClass().add("lock-badge-text");
-        lockBadge.getChildren().addAll(lockIcon, lockText);
-
-        bar.getChildren().addAll(title, spacer, lockBadge);
+        bar.getChildren().add(title);
         return bar;
     }
 
@@ -111,8 +142,8 @@ public class MainController implements TransferListener {
         sectionLabel.getStyleClass().add("section-label");
 
         cardsPane = new FlowPane();
-        cardsPane.setHgap(12);
-        cardsPane.setVgap(12);
+        cardsPane.setHgap(10);
+        cardsPane.setVgap(10);
         cardsPane.setPadding(new Insets(0, 0, 16, 0));
 
         emptyLabel = new Label("À procura de dispositivos na rede...");
@@ -138,27 +169,28 @@ public class MainController implements TransferListener {
     private Node buildBottom() {
         VBox bottom = new VBox(0);
 
-        // Buttons row
-        Button chooseBtn = new Button("Selecionar ficheiros");
-        chooseBtn.getStyleClass().add("btn-secondary");
-        chooseBtn.setOnAction(e -> chooseFiles());
+        // Buttons
+        chooseButton = new Button("Selecionar ficheiros  [F]");
+        chooseButton.getStyleClass().add("btn-secondary");
+        chooseButton.setOnAction(e -> chooseFiles());
 
-        sendButton = new Button("Enviar");
+        sendButton = new Button("Enviar  [Enter]");
         sendButton.getStyleClass().add("btn-primary");
         sendButton.setDisable(true);
         sendButton.setOnAction(e -> sendToSelected());
+        sendButton.setDefaultButton(true);
 
-        Button openDownloadsBtn = new Button("📂  Pasta de downloads");
+        Button openDownloadsBtn = new Button("Pasta de downloads");
         openDownloadsBtn.getStyleClass().add("btn-secondary");
         openDownloadsBtn.setOnAction(e -> openFolder(FileTransferService.DOWNLOAD_BASE.toString()));
 
-        filesLabel = new Label("Nenhum ficheiro selecionado");
+        filesLabel = new Label("Nenhum ficheiro selecionado  ·  [Esc] limpar");
         filesLabel.getStyleClass().add("files-label");
 
         HBox spacer = new HBox();
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        HBox btnRow = new HBox(10, chooseBtn, sendButton, spacer, openDownloadsBtn);
+        HBox btnRow = new HBox(10, chooseButton, sendButton, spacer, openDownloadsBtn);
         btnRow.setAlignment(Pos.CENTER_LEFT);
 
         HBox bottomBar = new HBox(12);
@@ -168,7 +200,6 @@ public class MainController implements TransferListener {
         VBox leftBar = new VBox(6, btnRow, filesLabel);
         leftBar.setAlignment(Pos.CENTER_LEFT);
         HBox.setHgrow(leftBar, Priority.ALWAYS);
-
         bottomBar.getChildren().add(leftBar);
 
         // Progress area
@@ -182,12 +213,12 @@ public class MainController implements TransferListener {
 
         ScrollPane progressScroll = new ScrollPane(progressContainer);
         progressScroll.setFitToWidth(true);
-        progressScroll.setPrefHeight(180);
+        progressScroll.setPrefHeight(170);
         progressScroll.getStyleClass().add("scroll-pane");
         progressScroll.setStyle("-fx-border-width:0;");
 
         bottom.getChildren().addAll(bottomBar, progressLabel, progressScroll);
-        VBox.setMargin(bottomBar, new Insets(10, 0, 0, 0));
+        VBox.setMargin(bottomBar, new Insets(8, 0, 0, 0));
         return bottom;
     }
 
@@ -195,15 +226,13 @@ public class MainController implements TransferListener {
         FileChooser chooser = new FileChooser();
         chooser.setTitle("Selecionar ficheiros");
         List<File> files = chooser.showOpenMultipleDialog(stage);
-        if (files != null && !files.isEmpty()) {
-            addSelectedFiles(files);
-        }
+        if (files != null && !files.isEmpty()) addSelectedFiles(files);
     }
 
     private void addSelectedFiles(List<File> files) {
         selectedFiles.addAll(files);
         long total = selectedFiles.stream().mapToLong(this::sizeOf).sum();
-        filesLabel.setText(selectedFiles.size() + " item(s) selecionado(s)  ·  " + formatSize(total));
+        filesLabel.setText(selectedFiles.size() + " ficheiro(s) selecionado(s)  ·  " + formatSize(total) + "  ·  [Esc] limpar");
         updateSendButton();
     }
 
@@ -227,15 +256,13 @@ public class MainController implements TransferListener {
             Peer peer = peers.get(peerId);
             if (peer == null) continue;
             String tid = UUID.randomUUID().toString();
-            // Panel created with placeholder — file list arrives via onSendStart
-            TransferProgressPanel panel = new TransferProgressPanel(
-                    peer.name, null, peer.ipAddress, "ENVIAR", null, 0);
+            TransferProgressPanel panel = new TransferProgressPanel(peer.name, null, peer.ipAddress, "ENVIAR", null, 0);
             progressPanels.put(tid, panel);
             Platform.runLater(() -> progressContainer.getChildren().add(0, panel.node()));
             FileTransferService.sendFiles(peer, toSend, tid, senderName, this);
         }
         selectedFiles.clear();
-        filesLabel.setText("Nenhum ficheiro selecionado");
+        filesLabel.setText("Nenhum ficheiro selecionado  ·  [Esc] limpar");
         for (String id : new ArrayList<>(selectedPeerIds)) {
             DeviceCard card = cards.get(id);
             if (card != null) card.setSelected(false);
@@ -258,14 +285,14 @@ public class MainController implements TransferListener {
             boolean isNew = !peers.containsKey(peer.id);
             peers.put(peer.id, peer);
             lastSeen.put(peer.id, System.currentTimeMillis());
-            if (isNew) {
-                TransferLogger.logPeerDiscovered(peer.name, peer.ipAddress, peer.tcpPort);
-            }
+            if (isNew) TransferLogger.logPeerDiscovered(peer.name, peer.ipAddress, peer.tcpPort);
             DeviceCard card = cards.get(peer.id);
             if (card == null) {
                 card = new DeviceCard(peer);
                 cards.put(peer.id, card);
                 cardsPane.getChildren().add(card.node());
+                // Focus first card automatically
+                if (cards.size() == 1) card.focus();
             } else {
                 card.updatePeer(peer);
             }
@@ -294,9 +321,8 @@ public class MainController implements TransferListener {
 
     static void openFolder(String path) {
         new Thread(() -> {
-            try {
-                new ProcessBuilder("xdg-open", path).start();
-            } catch (Exception e) {
+            try { new ProcessBuilder("xdg-open", path).start(); }
+            catch (Exception e) {
                 try { Desktop.getDesktop().open(new File(path)); } catch (Exception ignored) {}
             }
         }).start();
@@ -317,8 +343,6 @@ public class MainController implements TransferListener {
     public boolean onIncomingRequest(String transferId, String senderName, String senderIp,
                                      List<TransferMessage.FileEntry> files,
                                      long totalSize, int totalFiles) {
-        // Already on the FX thread (called via Platform.runLater in waitForUiResponse).
-        // Show the dialog directly — never nest another runLater/await here.
         TransferProgressPanel panel = new TransferProgressPanel(
                 senderName, null, senderIp, "RECEBER", files, totalSize);
         progressPanels.put(transferId, panel);
@@ -382,17 +406,18 @@ public class MainController implements TransferListener {
 
         DeviceCard(Peer peer) {
             this.peerId = peer.id;
-            box = new VBox(4);
+            box = new VBox(3);
             box.getStyleClass().add("device-card");
             box.setAlignment(Pos.TOP_LEFT);
+            box.setFocusTraversable(true);
 
             HBox topRow = new HBox();
             topRow.setAlignment(Pos.CENTER_LEFT);
-            Label icon = new Label("💻");
+            Label icon = new Label("○");
             icon.getStyleClass().add("card-icon");
             HBox iconSpacer = new HBox();
             HBox.setHgrow(iconSpacer, Priority.ALWAYS);
-            checkLabel = new Label("✓");
+            checkLabel = new Label("●");
             checkLabel.getStyleClass().add("card-selected-check");
             checkLabel.setVisible(false);
             topRow.getChildren().addAll(icon, iconSpacer, checkLabel);
@@ -405,7 +430,17 @@ public class MainController implements TransferListener {
             ipLabel.getStyleClass().add("card-ip");
 
             box.getChildren().addAll(topRow, nameLabel, hostLabel, ipLabel);
+
+            // Mouse
             box.setOnMouseClicked(e -> toggle());
+
+            // Keyboard: Space or Enter toggles selection
+            box.setOnKeyPressed(e -> {
+                if (e.getCode() == KeyCode.SPACE || e.getCode() == KeyCode.ENTER) {
+                    toggle();
+                    e.consume();
+                }
+            });
         }
 
         void toggle() {
@@ -417,13 +452,13 @@ public class MainController implements TransferListener {
 
         void setSelected(boolean value) {
             selected = value;
-            if (value) {
-                box.getStyleClass().add("selected");
-            } else {
-                box.getStyleClass().remove("selected");
-            }
+            if (value) box.getStyleClass().add("selected");
+            else box.getStyleClass().remove("selected");
             checkLabel.setVisible(value);
         }
+
+        boolean isFocused() { return box.isFocused(); }
+        void focus() { box.requestFocus(); }
 
         void updatePeer(Peer peer) {
             nameLabel.setText(peer.name);
