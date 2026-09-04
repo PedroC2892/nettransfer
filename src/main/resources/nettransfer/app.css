@@ -140,12 +140,11 @@
     -fx-border-color: #888888;
 }
 
-/* ── Bottom bar ── */
+/* ── Action / bottom bar ── */
 .bottom-bar {
-    -fx-background-color: #111111;
-    -fx-padding: 12 20 12 20;
+    -fx-background-color: #171717;
     -fx-border-color: #2a2a2a;
-    -fx-border-width: 1 0 0 0;
+    -fx-border-width: 1 0 1 0;
 }
 
 .files-label {
