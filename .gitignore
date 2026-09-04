@@ -1,4 +1,4 @@
 target/
 *.class
 .vscode/
-recebidos/
+recebidos/dependency-reduced-pom.xml
