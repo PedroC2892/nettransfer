@@ -212,6 +212,38 @@
 .summary-box  { -fx-background-color: #161616; -fx-background-radius: 6; -fx-padding: 10 14 10 14; }
 .summary-text { -fx-text-fill: #999999; -fx-font-size: 12px; }
 
+/* ── Verification code (MITM defence) ── */
+.verify-box {
+    -fx-background-color: #161616;
+    -fx-background-radius: 6;
+    -fx-padding: 12 14 12 14;
+    -fx-border-color: #333333;
+    -fx-border-width: 1;
+    -fx-border-radius: 6;
+}
+.verify-label { -fx-font-size: 11px; -fx-text-fill: #999999; }
+.verify-code  { -fx-font-size: 26px; -fx-font-weight: bold; -fx-text-fill: #f0f0f0; -fx-letter-spacing: 4; }
+.verify-warning { -fx-font-size: 12px; -fx-text-fill: #cccccc; -fx-font-weight: bold; }
+
+/* ── Settings / interfaces ── */
+.iface-row {
+    -fx-background-color: #1a1a1a;
+    -fx-background-radius: 8;
+    -fx-border-color: #2a2a2a;
+    -fx-border-width: 1;
+    -fx-border-radius: 8;
+    -fx-padding: 12 16 12 16;
+    -fx-cursor: hand;
+}
+
+.iface-row:hover   { -fx-background-color: #202020; -fx-border-color: #3a3a3a; }
+.iface-row:focused { -fx-border-color: #666666; }
+
+.iface-name    { -fx-font-size: 13px; -fx-font-weight: bold; -fx-text-fill: #f0f0f0; }
+.iface-display { -fx-font-size: 11px; -fx-text-fill: #999999; }
+.iface-detail  { -fx-font-size: 12px; -fx-text-fill: #cccccc; }
+.iface-status  { -fx-font-size: 11px; -fx-text-fill: #999999; }
+
 /* ── ScrollPane ── */
 .scroll-pane { -fx-background-color: transparent; -fx-background: transparent; }
 .scroll-pane > .viewport { -fx-background-color: transparent; }

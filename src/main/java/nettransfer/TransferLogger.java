@@ -101,6 +101,39 @@ public class TransferLogger {
                 + row("IP", ip));
     }
 
+    public static void logInterfaces(List<NetworkInterfaceInfo> interfaces) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(header("NETWORK INTERFACES", null));
+        for (NetworkInterfaceInfo i : interfaces) {
+            sb.append(row(i.name, i.ipAddress + "/" + i.prefixLength
+                    + (i.broadcastAddress != null ? "  bcast " + i.broadcastAddress : "  no broadcast")));
+        }
+        write(sb.toString());
+    }
+
+    public static void logConnectionRejected(String ip) {
+        write(header("CONNECTION REJECTED", null) + row("From", ip) + row("Reason", "connection limit reached"));
+    }
+
+    public static void logSecurityEvent(String reason, String peerIp) {
+        write(header("SECURITY EVENT", null)
+                + row("Reason", reason)
+                + row("Peer", peerIp != null ? peerIp : "unknown"));
+    }
+
+    public static void logIntegrityError(String transferId, String relativePath, String expected, String actual) {
+        write(header("INTEGRITY ERROR", transferId)
+                + row("File", relativePath)
+                + row("Expected", expected)
+                + row("Actual", actual));
+    }
+
+    public static void logPartialCleanup(String transferId, int filesRemoved, long bytesFreed) {
+        write(header("PARTIAL CLEANUP", transferId)
+                + row("Files removed", String.valueOf(filesRemoved))
+                + row("Bytes freed", formatSize(bytesFreed)));
+    }
+
     // ── Formatting ────────────────────────────────────────────────────────────
 
     private static String header(String event, String id) {

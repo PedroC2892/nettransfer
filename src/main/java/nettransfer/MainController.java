@@ -52,16 +52,21 @@ public class MainController implements TransferListener {
     private final Map<String, ActiveTransfer> activeTransfers = new ConcurrentHashMap<>();
 
     private int focusedCardIndex = -1;
-    private int activeTab = 0; // 0=devices, 1=logs
+    private int activeTab = 0; // 0=devices, 1=logs, 2=settings
 
     // UI refs
     private FlowPane cardsPane;
     private Label emptyLabel;
     private Label filesLabel;
     private Button sendButton;
-    private Button navDevices, navLogs;
+    private Button navDevices, navLogs, navSettings;
     private StackPane centerStack;
     private VBox devicesView;
+    private VBox logsView;
+    private VBox settingsView;
+    private VBox ifaceListBox;
+    private final List<IfaceRow> ifaceRows = new ArrayList<>();
+    private int focusedIfaceIndex = -1;
     private TextArea logArea;
     private javafx.scene.control.TextField logSearchField;
     private String logFullText = "";
@@ -123,7 +128,11 @@ public class MainController implements TransferListener {
         navLogs.getStyleClass().add("nav-tab");
         navLogs.setOnAction(e -> switchTab(1));
 
-        HBox bar = new HBox(0, title, spacer, navDevices, navLogs);
+        navSettings = new Button("Settings  [Ctrl+3]");
+        navSettings.getStyleClass().add("nav-tab");
+        navSettings.setOnAction(e -> switchTab(2));
+
+        HBox bar = new HBox(0, title, spacer, navDevices, navLogs, navSettings);
         bar.getStyleClass().add("top-bar");
         bar.setAlignment(Pos.CENTER_LEFT);
         return bar;
@@ -134,17 +143,18 @@ public class MainController implements TransferListener {
         devicesView = buildDevicesView();
 
         // Log view
-        VBox logsView = buildLogsView();
+        logsView = buildLogsView();
         logsView.setVisible(false);
+
+        // Settings view
+        settingsView = buildSettingsView();
+        settingsView.setVisible(false);
 
         // Overlay (transfer in progress)
         overlayView = buildOverlay();
         overlayView.setVisible(false);
 
-        centerStack = new StackPane(devicesView, logsView, overlayView);
-        // Store reference to logs view so we can toggle it
-        centerStack.getChildren().get(1).setUserData("logs");
-
+        centerStack = new StackPane(devicesView, logsView, settingsView, overlayView);
         return centerStack;
     }
 
@@ -253,6 +263,151 @@ public class MainController implements TransferListener {
         return overlay;
     }
 
+    // ── Settings (network interfaces) ───────────────────────────────────────────
+
+    private VBox buildSettingsView() {
+        Label secLabel = new Label("NETWORK INTERFACES");
+        secLabel.getStyleClass().add("section-label");
+
+        ifaceListBox = new VBox(8);
+
+        ScrollPane scroll = new ScrollPane(ifaceListBox);
+        scroll.setFitToWidth(true);
+        scroll.getStyleClass().add("scroll-pane");
+        scroll.setStyle("-fx-border-width:0;");
+        VBox.setVgrow(scroll, Priority.ALWAYS);
+
+        VBox top = new VBox(0, secLabel, scroll);
+        top.setPadding(new Insets(0, 20, 0, 20));
+        VBox.setVgrow(top, Priority.ALWAYS);
+
+        Button selectAllBtn = new Button("Select all  [Ctrl+A]");
+        selectAllBtn.getStyleClass().add("btn-secondary");
+        selectAllBtn.setOnAction(e -> setAllIfaces(true));
+
+        Button deselectAllBtn = new Button("Deselect all  [Ctrl+Shift+A]");
+        deselectAllBtn.getStyleClass().add("btn-secondary");
+        deselectAllBtn.setOnAction(e -> setAllIfaces(false));
+
+        HBox btnRow = new HBox(10, selectAllBtn, deselectAllBtn);
+        btnRow.setAlignment(Pos.CENTER_LEFT);
+        VBox actionBar = new VBox(btnRow);
+        actionBar.getStyleClass().add("action-bar");
+
+        VBox view = new VBox(0, top, actionBar);
+        VBox.setVgrow(top, Priority.ALWAYS);
+        return view;
+    }
+
+    private void refreshIfaceRows() {
+        ifaceListBox.getChildren().clear();
+        ifaceRows.clear();
+        AppSettings settings = AppSettings.load();
+        for (NetworkInterfaceInfo info : NetworkInterfaceInfo.enumerate()) {
+            IfaceRow row = new IfaceRow(info, settings.isInterfaceEnabled(info.name));
+            ifaceRows.add(row);
+            ifaceListBox.getChildren().add(row.node());
+        }
+        focusedIfaceIndex = ifaceRows.isEmpty() ? -1 : Math.min(Math.max(0, focusedIfaceIndex), ifaceRows.size() - 1);
+    }
+
+    private void navigateIfaceRows(int delta) {
+        if (ifaceRows.isEmpty()) return;
+        if (focusedIfaceIndex < 0) focusedIfaceIndex = 0;
+        else focusedIfaceIndex = Math.max(0, Math.min(ifaceRows.size() - 1, focusedIfaceIndex + delta));
+        ifaceRows.get(focusedIfaceIndex).focus();
+    }
+
+    private void setAllIfaces(boolean enabled) {
+        AppSettings settings = AppSettings.load();
+        settings.autoSelectAll = false;
+        settings.enabledInterfaces.clear();
+        if (enabled) {
+            for (IfaceRow row : ifaceRows) settings.enabledInterfaces.add(row.info.name);
+        }
+        settings.save();
+        for (IfaceRow row : ifaceRows) row.setEnabled(enabled);
+    }
+
+    private class IfaceRow {
+        final NetworkInterfaceInfo info;
+        private boolean enabled;
+        private final HBox box;
+        private final javafx.scene.control.CheckBox checkBox;
+
+        IfaceRow(NetworkInterfaceInfo info, boolean enabled) {
+            this.info = info;
+            this.enabled = enabled;
+
+            checkBox = new javafx.scene.control.CheckBox();
+            checkBox.setSelected(enabled);
+            checkBox.setFocusTraversable(false);
+            checkBox.setOnAction(e -> { toggle(); });
+
+            Label name = new Label(info.name);
+            name.getStyleClass().add("iface-name");
+            Label display = new Label(info.displayName);
+            display.getStyleClass().add("iface-display");
+            VBox nameBox = new VBox(1, name, display);
+            nameBox.setPrefWidth(160);
+
+            Label addr = new Label(info.ipAddress + "/" + info.prefixLength);
+            addr.getStyleClass().add("iface-detail");
+            addr.setPrefWidth(150);
+
+            Label bcast = new Label(info.broadcastAddress != null ? info.broadcastAddress : "—");
+            bcast.getStyleClass().add("iface-detail");
+            bcast.setPrefWidth(130);
+
+            Label mac = new Label(info.macAddress);
+            mac.getStyleClass().add("iface-detail");
+            mac.setPrefWidth(140);
+
+            Label mtu = new Label(info.mtu >= 0 ? String.valueOf(info.mtu) : "—");
+            mtu.getStyleClass().add("iface-detail");
+            mtu.setPrefWidth(60);
+
+            Label status = new Label((info.isUp ? "UP" : "DOWN") + (info.supportsBroadcast ? "  ·  broadcast" : "  ·  no broadcast"));
+            status.getStyleClass().add("iface-status");
+
+            box = new HBox(14, checkBox, nameBox, addr, bcast, mac, mtu, status);
+            box.getStyleClass().add("iface-row");
+            box.setAlignment(Pos.CENTER_LEFT);
+            box.setFocusTraversable(true);
+
+            box.setOnMouseClicked(e -> {
+                focusedIfaceIndex = ifaceRows.indexOf(this);
+                toggle();
+            });
+            box.setOnKeyPressed(e -> {
+                if (e.getCode() == KeyCode.SPACE) { toggle(); e.consume(); }
+            });
+        }
+
+        void toggle() { setEnabled(!enabled); persist(); }
+
+        void setEnabled(boolean v) {
+            enabled = v;
+            checkBox.setSelected(v);
+        }
+
+        private void persist() {
+            AppSettings settings = AppSettings.load();
+            if (settings.autoSelectAll && settings.enabledInterfaces.isEmpty()) {
+                // first change ever: seed an explicit set from the current (all-enabled) UI state
+                for (IfaceRow row : ifaceRows) settings.enabledInterfaces.add(row.info.name);
+            }
+            settings.autoSelectAll = false;
+            if (enabled) settings.enabledInterfaces.add(info.name);
+            else settings.enabledInterfaces.remove(info.name);
+            settings.save();
+        }
+
+        void focus() { box.requestFocus(); }
+
+        Node node() { return box; }
+    }
+
     // ── Tab / overlay switching ───────────────────────────────────────────────
 
     // True while transfers exist — the overlay is "open" even if temporarily
@@ -263,10 +418,12 @@ public class MainController implements TransferListener {
         activeTab = tab;
         navDevices.getStyleClass().remove("active");
         navLogs.getStyleClass().remove("active");
+        navSettings.getStyleClass().remove("active");
 
         if (tab == 0) {
             navDevices.getStyleClass().add("active");
-            centerStack.getChildren().get(1).setVisible(false);
+            logsView.setVisible(false);
+            settingsView.setVisible(false);
             // Back to devices: overlay reclaims the screen if transfers are live
             if (overlayActive) {
                 overlayView.setVisible(true);
@@ -276,14 +433,26 @@ public class MainController implements TransferListener {
                 overlayView.setVisible(false);
                 devicesView.setVisible(true);
             }
-        } else {
+        } else if (tab == 1) {
             navLogs.getStyleClass().add("active");
             // Logs win over the overlay while you're looking at them
             overlayView.setVisible(false);
             devicesView.setVisible(false);
-            centerStack.getChildren().get(1).setVisible(true);
+            settingsView.setVisible(false);
+            logsView.setVisible(true);
             refreshLog();
             logArea.requestFocus();
+        } else {
+            navSettings.getStyleClass().add("active");
+            overlayView.setVisible(false);
+            devicesView.setVisible(false);
+            logsView.setVisible(false);
+            settingsView.setVisible(true);
+            refreshIfaceRows();
+            if (!ifaceRows.isEmpty()) {
+                if (focusedIfaceIndex < 0) focusedIfaceIndex = 0;
+                ifaceRows.get(focusedIfaceIndex).focus();
+            }
         }
     }
 
@@ -336,6 +505,7 @@ public class MainController implements TransferListener {
     private void handleKey(KeyEvent e) {
         if (e.isControlDown() && e.getCode() == KeyCode.DIGIT1) { switchTab(0); e.consume(); return; }
         if (e.isControlDown() && e.getCode() == KeyCode.DIGIT2) { switchTab(1); e.consume(); return; }
+        if (e.isControlDown() && e.getCode() == KeyCode.DIGIT3) { switchTab(2); e.consume(); return; }
 
         // Works on every tab, even while the overlay is up
         if (e.isControlDown() && e.getCode() == KeyCode.D) {
@@ -376,6 +546,25 @@ public class MainController implements TransferListener {
 
         // Na aba de registos não interceptar nada (deixar a TextArea e o campo de pesquisa gerir tudo)
         if (activeTab == 1) return;
+
+        if (activeTab == 2) {
+            switch (e.getCode()) {
+                case LEFT, UP    -> { navigateIfaceRows(-1); e.consume(); }
+                case RIGHT, DOWN -> { navigateIfaceRows(+1); e.consume(); }
+                case ENTER, SPACE -> {
+                    if (focusedIfaceIndex >= 0 && focusedIfaceIndex < ifaceRows.size()) {
+                        ifaceRows.get(focusedIfaceIndex).toggle();
+                        e.consume();
+                    }
+                }
+                case A -> {
+                    if (e.isControlDown() && e.isShiftDown()) { setAllIfaces(false); e.consume(); }
+                    else if (e.isControlDown()) { setAllIfaces(true); e.consume(); }
+                }
+                default -> {}
+            }
+            return;
+        }
 
         switch (e.getCode()) {
             case F -> { chooseFiles(); e.consume(); }
