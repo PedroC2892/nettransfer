@@ -10,7 +10,7 @@ import java.util.List;
 
 public class TransferLogger {
 
-    private static final Path LOG_FILE = FileTransferService.DOWNLOAD_BASE.resolve("nettransfer.log");
+    public static final Path LOG_FILE = FileTransferService.DOWNLOAD_BASE.resolve("nettransfer.log");
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     static {
