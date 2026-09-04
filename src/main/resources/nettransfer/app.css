@@ -4,7 +4,7 @@
     -fx-background-color: #111111;
     -fx-font-family: "Inter", "Segoe UI", "DejaVu Sans", sans-serif;
     -fx-font-size: 13px;
-    -fx-text-fill: #e8e8e8;
+    -fx-text-fill: #f0f0f0;
 }
 
 /* ── Top bar ── */
@@ -18,13 +18,13 @@
 .app-title {
     -fx-font-size: 15px;
     -fx-font-weight: bold;
-    -fx-text-fill: #e8e8e8;
+    -fx-text-fill: #f0f0f0;
 }
 
 /* ── Nav tabs ── */
 .nav-tab {
     -fx-background-color: transparent;
-    -fx-text-fill: #555555;
+    -fx-text-fill: #cccccc;
     -fx-font-size: 12px;
     -fx-font-weight: bold;
     -fx-padding: 10 16 10 16;
@@ -36,13 +36,13 @@
 
 .nav-tab:hover   { -fx-text-fill: #999999; }
 .nav-tab:focused { -fx-text-fill: #aaaaaa; }
-.nav-tab.active  { -fx-text-fill: #e8e8e8; -fx-border-color: #e8e8e8; }
+.nav-tab.active  { -fx-text-fill: #f0f0f0; -fx-border-color: #e8e8e8; }
 
 /* ── Section label ── */
 .section-label {
     -fx-font-size: 10px;
     -fx-font-weight: bold;
-    -fx-text-fill: #444444;
+    -fx-text-fill: #999999;
     -fx-padding: 14 0 8 0;
 }
 
@@ -64,11 +64,11 @@
 .device-card.selected       { -fx-border-color: #e8e8e8; -fx-border-width: 1.5; }
 .device-card.selected:focused { -fx-border-color: #ffffff; -fx-border-width: 2; }
 
-.card-name  { -fx-font-size: 13px; -fx-font-weight: bold; -fx-text-fill: #e8e8e8; }
-.card-host  { -fx-font-size: 12px; -fx-text-fill: #777777; }
-.card-ip    { -fx-font-size: 11px; -fx-text-fill: #444444; }
-.card-icon  { -fx-font-size: 16px; -fx-text-fill: #444444; }
-.card-selected-check { -fx-text-fill: #e8e8e8; -fx-font-size: 12px; }
+.card-name  { -fx-font-size: 13px; -fx-font-weight: bold; -fx-text-fill: #f0f0f0; }
+.card-host  { -fx-font-size: 12px; -fx-text-fill: #aaaaaa; }
+.card-ip    { -fx-font-size: 11px; -fx-text-fill: #999999; }
+.card-icon  { -fx-font-size: 16px; -fx-text-fill: #999999; }
+.card-selected-check { -fx-text-fill: #f0f0f0; -fx-font-size: 12px; }
 
 .empty-label { -fx-text-fill: #3a3a3a; -fx-font-size: 13px; }
 
@@ -80,7 +80,7 @@
     -fx-border-width: 1 0 0 0;
 }
 
-.files-label { -fx-text-fill: #555555; -fx-font-size: 12px; }
+.files-label { -fx-text-fill: #cccccc; -fx-font-size: 12px; }
 
 /* ── Buttons ── */
 .btn-primary {
@@ -95,11 +95,11 @@
 
 .btn-primary:hover    { -fx-background-color: #ffffff; }
 .btn-primary:focused  { -fx-effect: dropshadow(gaussian, rgba(255,255,255,0.3), 6, 0, 0, 0); }
-.btn-primary:disabled { -fx-background-color: #252525; -fx-text-fill: #444444; }
+.btn-primary:disabled { -fx-background-color: #252525; -fx-text-fill: #999999; }
 
 .btn-secondary {
     -fx-background-color: transparent;
-    -fx-text-fill: #777777;
+    -fx-text-fill: #aaaaaa;
     -fx-background-radius: 6;
     -fx-border-color: #2a2a2a;
     -fx-border-radius: 6;
@@ -108,8 +108,8 @@
     -fx-cursor: hand;
 }
 
-.btn-secondary:hover   { -fx-text-fill: #e8e8e8; -fx-border-color: #555555; }
-.btn-secondary:focused { -fx-text-fill: #e8e8e8; -fx-border-color: #777777; }
+.btn-secondary:hover   { -fx-text-fill: #f0f0f0; -fx-border-color: #555555; }
+.btn-secondary:focused { -fx-text-fill: #f0f0f0; -fx-border-color: #777777; }
 
 /* ── Overlay ── */
 .overlay {
@@ -123,7 +123,7 @@
     -fx-border-width: 0 0 1 0;
 }
 
-.overlay-title   { -fx-font-size: 13px; -fx-font-weight: bold; -fx-text-fill: #444444; }
+.overlay-title   { -fx-font-size: 13px; -fx-font-weight: bold; -fx-text-fill: #999999; }
 .overlay-counter { -fx-font-size: 12px; -fx-text-fill: #333333; }
 
 .overlay-card {
@@ -135,18 +135,18 @@
     -fx-padding: 20 24 20 24;
 }
 
-.overlay-direction   { -fx-font-size: 13px; -fx-text-fill: #555555; -fx-font-weight: bold; }
-.overlay-peer-name   { -fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: #e8e8e8; }
-.overlay-peer-ip     { -fx-font-size: 12px; -fx-text-fill: #555555; }
-.overlay-file-name   { -fx-font-size: 12px; -fx-text-fill: #888888; }
-.overlay-file-size   { -fx-font-size: 12px; -fx-text-fill: #444444; }
-.overlay-pct         { -fx-font-size: 12px; -fx-text-fill: #666666; -fx-min-width: 36; }
-.overlay-detail      { -fx-font-size: 12px; -fx-text-fill: #555555; }
+.overlay-direction   { -fx-font-size: 13px; -fx-text-fill: #cccccc; -fx-font-weight: bold; }
+.overlay-peer-name   { -fx-font-size: 16px; -fx-font-weight: bold; -fx-text-fill: #f0f0f0; }
+.overlay-peer-ip     { -fx-font-size: 12px; -fx-text-fill: #cccccc; }
+.overlay-file-name   { -fx-font-size: 12px; -fx-text-fill: #cccccc; }
+.overlay-file-size   { -fx-font-size: 12px; -fx-text-fill: #999999; }
+.overlay-pct         { -fx-font-size: 12px; -fx-text-fill: #999999; -fx-min-width: 36; }
+.overlay-detail      { -fx-font-size: 12px; -fx-text-fill: #cccccc; }
 
-.overlay-status         { -fx-font-size: 12px; -fx-text-fill: #555555; }
-.overlay-status.done    { -fx-text-fill: #e8e8e8; }
-.overlay-status.error   { -fx-text-fill: #666666; }
-.overlay-status.rejected{ -fx-text-fill: #444444; }
+.overlay-status         { -fx-font-size: 12px; -fx-text-fill: #cccccc; }
+.overlay-status.done    { -fx-text-fill: #f0f0f0; }
+.overlay-status.error   { -fx-text-fill: #999999; }
+.overlay-status.rejected{ -fx-text-fill: #999999; }
 
 .overlay-footer {
     -fx-background-color: #111111;
@@ -180,7 +180,7 @@
     -fx-control-inner-background: #0d0d0d;
     -fx-font-family: "JetBrains Mono", "Fira Mono", "DejaVu Sans Mono", monospace;
     -fx-font-size: 12px;
-    -fx-text-fill: #777777;
+    -fx-text-fill: #aaaaaa;
     -fx-border-width: 0;
     -fx-background-color: #0d0d0d;
     -fx-highlight-fill: #2a2a2a;
@@ -195,8 +195,8 @@
     -fx-border-width: 0 0 1 0;
 }
 
-.dialog-title  { -fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: #e8e8e8; }
-.dialog-sender { -fx-font-size: 12px; -fx-text-fill: #555555; }
+.dialog-title  { -fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: #f0f0f0; }
+.dialog-sender { -fx-font-size: 12px; -fx-text-fill: #cccccc; }
 
 .file-entry {
     -fx-padding: 5 0 5 0;
@@ -204,11 +204,11 @@
     -fx-border-width: 1;
 }
 
-.file-entry-name { -fx-text-fill: #bbbbbb; -fx-font-size: 12px; }
-.file-entry-size { -fx-text-fill: #444444; -fx-font-size: 12px; }
+.file-entry-name { -fx-text-fill: #cccccc; -fx-font-size: 12px; }
+.file-entry-size { -fx-text-fill: #999999; -fx-font-size: 12px; }
 
 .summary-box  { -fx-background-color: #161616; -fx-background-radius: 6; -fx-padding: 10 14 10 14; }
-.summary-text { -fx-text-fill: #666666; -fx-font-size: 12px; }
+.summary-text { -fx-text-fill: #999999; -fx-font-size: 12px; }
 
 /* ── ScrollPane ── */
 .scroll-pane { -fx-background-color: transparent; -fx-background: transparent; }

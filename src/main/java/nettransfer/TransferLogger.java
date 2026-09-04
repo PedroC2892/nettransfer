@@ -20,75 +20,75 @@ public class TransferLogger {
     public static void logSendStart(String transferId, String peerName, String peerIp,
                                      List<TransferMessage.FileEntry> files, long totalSize) {
         StringBuilder sb = new StringBuilder();
-        sb.append(header("ENVIO", transferId));
-        sb.append(row("Para", peerName + " (" + peerIp + ")"));
+        sb.append(header("SEND", transferId));
+        sb.append(row("To", peerName + " (" + peerIp + ")"));
         sb.append(row("Total", formatSize(totalSize) + "  ·  " + files.size() + " ficheiro(s)"));
         for (TransferMessage.FileEntry f : files) {
-            String tag = f.isDirectory ? "  [pasta]" : "  [fich] ";
+            String tag = f.isDirectory ? "  [dir]  " : "  [file] ";
             sb.append(row(tag + f.relativePath, f.isDirectory ? "" : formatSize(f.size)));
         }
         write(sb.toString());
     }
 
     public static void logSendDone(String transferId, String peerName, long totalSize, long elapsedMs) {
-        write(header("ENVIO CONCLUÍDO", transferId)
-                + row("Para", peerName)
+        write(header("SEND DONE", transferId)
+                + row("To", peerName)
                 + row("Total", formatSize(totalSize))
-                + row("Tempo", elapsedMs / 1000 + "s")
-                + row("Velocidade", elapsedMs > 0 ? formatSize((long)(totalSize * 1000.0 / elapsedMs)) + "/s" : "—"));
+                + row("Duration", elapsedMs / 1000 + "s")
+                + row("Speed", elapsedMs > 0 ? formatSize((long)(totalSize * 1000.0 / elapsedMs)) + "/s" : "—"));
     }
 
     public static void logSendRejected(String transferId, String peerName) {
-        write(header("ENVIO RECUSADO", transferId) + row("Por", peerName));
+        write(header("SEND REJECTED", transferId) + row("By", peerName));
     }
 
     public static void logSendError(String transferId, String peerName) {
-        write(header("ERRO NO ENVIO", transferId) + row("Para", peerName));
+        write(header("SEND ERROR", transferId) + row("To", peerName));
     }
 
     public static void logReceiveRequest(String transferId, String senderName, String senderIp,
                                           List<TransferMessage.FileEntry> files, long totalSize) {
         StringBuilder sb = new StringBuilder();
-        sb.append(header("PEDIDO RECEBIDO", transferId));
-        sb.append(row("De", senderName + " (" + senderIp + ")"));
+        sb.append(header("INCOMING REQUEST", transferId));
+        sb.append(row("From", senderName + " (" + senderIp + ")"));
         sb.append(row("Total", formatSize(totalSize) + "  ·  " + files.size() + " ficheiro(s)"));
         for (TransferMessage.FileEntry f : files) {
-            String tag = f.isDirectory ? "  [pasta]" : "  [fich] ";
+            String tag = f.isDirectory ? "  [dir]  " : "  [file] ";
             sb.append(row(tag + f.relativePath, f.isDirectory ? "" : formatSize(f.size)));
         }
         write(sb.toString());
     }
 
     public static void logReceiveAccepted(String transferId, String destDir) {
-        write(header("RECEÇÃO ACEITE", transferId) + row("Pasta", destDir));
+        write(header("TRANSFER ACCEPTED", transferId) + row("Folder", destDir));
     }
 
     public static void logReceiveRejected(String transferId) {
-        write(header("RECEÇÃO RECUSADA", transferId));
+        write(header("TRANSFER REJECTED", transferId));
     }
 
     public static void logReceiveDone(String transferId, String senderName, long totalSize, long elapsedMs) {
-        write(header("RECEÇÃO CONCLUÍDA", transferId)
-                + row("De", senderName)
+        write(header("RECEIVE DONE", transferId)
+                + row("From", senderName)
                 + row("Total", formatSize(totalSize))
-                + row("Tempo", elapsedMs / 1000 + "s")
-                + row("Velocidade", elapsedMs > 0 ? formatSize((long)(totalSize * 1000.0 / elapsedMs)) + "/s" : "—"));
+                + row("Duration", elapsedMs / 1000 + "s")
+                + row("Speed", elapsedMs > 0 ? formatSize((long)(totalSize * 1000.0 / elapsedMs)) + "/s" : "—"));
     }
 
     public static void logReceiveError(String transferId) {
-        write(header("ERRO NA RECEÇÃO", transferId));
+        write(header("RECEIVE ERROR", transferId));
     }
 
     public static void logPeerDiscovered(String name, String ip, int port) {
-        write(header("DISPOSITIVO DESCOBERTO", null)
-                + row("Nome", name)
+        write(header("DEVICE FOUND", null)
+                + row("Name", name)
                 + row("IP", ip)
-                + row("Porta", String.valueOf(port)));
+                + row("Port", String.valueOf(port)));
     }
 
     public static void logPeerLost(String name, String ip) {
-        write(header("DISPOSITIVO PERDIDO", null)
-                + row("Nome", name)
+        write(header("DEVICE LOST", null)
+                + row("Name", name)
                 + row("IP", ip));
     }
 

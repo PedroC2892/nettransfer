@@ -110,11 +110,11 @@ public class MainController implements TransferListener {
 
         HBox spacer = new HBox(); HBox.setHgrow(spacer, Priority.ALWAYS);
 
-        navDevices = new Button("Dispositivos  [Ctrl+1]");
+        navDevices = new Button("Devices  [Ctrl+1]");
         navDevices.getStyleClass().addAll("nav-tab", "active");
         navDevices.setOnAction(e -> switchTab(0));
 
-        navLogs = new Button("Registos  [Ctrl+2]");
+        navLogs = new Button("Logs  [Ctrl+2]");
         navLogs.getStyleClass().add("nav-tab");
         navLogs.setOnAction(e -> switchTab(1));
 
@@ -154,7 +154,7 @@ public class MainController implements TransferListener {
         cardsPane.setPadding(new Insets(0, 0, 16, 0));
         cardsPane.setVisible(false);
 
-        emptyLabel = new Label("À procura de dispositivos na rede...");
+        emptyLabel = new Label("Looking for devices on the network...");
         emptyLabel.getStyleClass().add("empty-label");
         emptyLabel.setMaxWidth(Double.MAX_VALUE);
         emptyLabel.setAlignment(Pos.CENTER);
@@ -182,11 +182,11 @@ public class MainController implements TransferListener {
     }
 
     private Node buildActionBar() {
-        Button chooseBtn = new Button("Selecionar ficheiros  [F]");
+        Button chooseBtn = new Button("Select files  [F]");
         chooseBtn.getStyleClass().add("btn-secondary");
         chooseBtn.setOnAction(e -> chooseFiles());
 
-        sendButton = new Button("Enviar  [Ctrl+S]");
+        sendButton = new Button("Send  [Ctrl+S]");
         sendButton.getStyleClass().add("btn-primary");
         sendButton.setDisable(true);
         sendButton.setOnAction(e -> sendToSelected());
@@ -195,7 +195,7 @@ public class MainController implements TransferListener {
         openBtn.getStyleClass().add("btn-secondary");
         openBtn.setOnAction(e -> openFolder(FileTransferService.DOWNLOAD_BASE.toString()));
 
-        filesLabel = new Label("Nenhum ficheiro selecionado");
+        filesLabel = new Label("No files selected");
         filesLabel.getStyleClass().add("files-label");
 
         HBox sp = new HBox(); HBox.setHgrow(sp, Priority.ALWAYS);
@@ -209,7 +209,7 @@ public class MainController implements TransferListener {
 
     private VBox buildOverlay() {
         // Header
-        Label titleLabel = new Label("TRANSFERÊNCIA");
+        Label titleLabel = new Label("TRANSFER");
         titleLabel.getStyleClass().add("overlay-title");
         overlayHint = new Label("");
         overlayHint.getStyleClass().add("overlay-counter");
@@ -228,7 +228,7 @@ public class MainController implements TransferListener {
         VBox.setVgrow(scroll, Priority.ALWAYS);
 
         // Footer
-        overlayDismissBtn = new Button("Fechar  [Esc]");
+        overlayDismissBtn = new Button("Close  [Esc]");
         overlayDismissBtn.getStyleClass().add("btn-primary");
         overlayDismissBtn.setDisable(true);
         overlayDismissBtn.setOnAction(e -> dismissOverlay());
@@ -259,14 +259,14 @@ public class MainController implements TransferListener {
         } else {
             navLogs.getStyleClass().add("active");
             refreshLog();
-            logSearchField.requestFocus();
+            logArea.requestFocus();
         }
     }
 
     private void showOverlay() {
         overlayView.setVisible(true);
         overlayDismissBtn.setDisable(true);
-        overlayHint.setText("Em curso...");
+        overlayHint.setText("In progress...");
         overlayDismissBtn.requestFocus();
     }
 
@@ -286,9 +286,9 @@ public class MainController implements TransferListener {
         long done = activeTransfers.values().stream().filter(ActiveTransfer::isDone).count();
         long total = activeTransfers.size();
         if (allDone) {
-            overlayHint.setText("Concluído — " + done + "/" + total);
+            overlayHint.setText("Done — " + done + "/" + total);
         } else {
-            overlayHint.setText(done + "/" + total + " concluídas");
+            overlayHint.setText(done + "/" + total + " done");
         }
     }
 
@@ -324,7 +324,7 @@ public class MainController implements TransferListener {
             case S -> {
                 if (e.isControlDown() && !sendButton.isDisabled()) { sendToSelected(); e.consume(); }
             }
-            case ESCAPE -> { selectedFiles.clear(); filesLabel.setText("Nenhum ficheiro selecionado"); updateSendButton(); e.consume(); }
+            case ESCAPE -> { selectedFiles.clear(); filesLabel.setText("No files selected"); updateSendButton(); e.consume(); }
             case LEFT, UP   -> { navigateCards(-1, e.isShiftDown()); e.consume(); }
             case RIGHT, DOWN -> { navigateCards(+1, e.isShiftDown()); e.consume(); }
             case ENTER, SPACE -> {
@@ -367,7 +367,7 @@ public class MainController implements TransferListener {
 
     private void chooseFiles() {
         FileChooser chooser = new FileChooser();
-        chooser.setTitle("Selecionar ficheiros");
+        chooser.setTitle("Select files");
         List<File> files = chooser.showOpenMultipleDialog(stage);
         if (files != null && !files.isEmpty()) addSelectedFiles(files);
     }
@@ -375,7 +375,7 @@ public class MainController implements TransferListener {
     private void addSelectedFiles(List<File> files) {
         selectedFiles.addAll(files);
         long total = selectedFiles.stream().mapToLong(this::sizeOf).sum();
-        filesLabel.setText(selectedFiles.size() + " ficheiro(s)  ·  " + formatSize(total) + "  ·  [Esc] limpar");
+        filesLabel.setText(selectedFiles.size() + " file(s)  ·  " + formatSize(total) + "  ·  [Esc] clear");
         updateSendButton();
     }
 
@@ -400,11 +400,11 @@ public class MainController implements TransferListener {
             if (peer == null) continue;
             String tid = UUID.randomUUID().toString();
             // Overlay entry created immediately (file list filled in onSendStart)
-            addToOverlay(tid, peer.name, peer.ipAddress, "ENVIAR", null, 0);
+            addToOverlay(tid, peer.name, peer.ipAddress, "SEND", null, 0);
             FileTransferService.sendFiles(peer, toSend, tid, senderName, this);
         }
         selectedFiles.clear();
-        filesLabel.setText("Nenhum ficheiro selecionado");
+        filesLabel.setText("No files selected");
         for (String id : new ArrayList<>(selectedPeerIds)) {
             DeviceCard c = cards.get(id); if (c != null) c.setSelected(false);
         }
@@ -455,16 +455,16 @@ public class MainController implements TransferListener {
     private VBox buildLogsView() {
         // Search bar
         logSearchField = new javafx.scene.control.TextField();
-        logSearchField.setPromptText("Pesquisar nos registos...");
+        logSearchField.setPromptText("Search logs...  [Ctrl+F]");
         logSearchField.getStyleClass().add("log-search");
         logSearchField.textProperty().addListener((obs, old, val) -> applySearch(val));
 
         Button clearSearch = new Button("✕");
         clearSearch.getStyleClass().add("btn-secondary");
         clearSearch.setStyle("-fx-font-size:11px; -fx-padding: 6 10 6 10;");
-        clearSearch.setOnAction(e -> { logSearchField.clear(); logSearchField.requestFocus(); });
+        clearSearch.setOnAction(e -> { logSearchField.clear(); logArea.requestFocus(); });
 
-        Button openLogBtn = new Button("Abrir ficheiro");
+        Button openLogBtn = new Button("Open folder");
         openLogBtn.getStyleClass().add("btn-secondary");
         openLogBtn.setStyle("-fx-font-size:11px; -fx-padding: 6 10 6 10;");
         openLogBtn.setOnAction(e -> openFolder(FileTransferService.DOWNLOAD_BASE.toString()));
@@ -474,21 +474,21 @@ public class MainController implements TransferListener {
         searchBar.setPadding(new Insets(12, 20, 10, 20));
         HBox.setHgrow(logSearchField, Priority.ALWAYS);
 
-        // Log text area — scrollable with arrows when focused
         logArea = new TextArea();
         logArea.getStyleClass().add("log-area");
         logArea.setEditable(false);
         logArea.setWrapText(false);
-        logArea.setText("(sem registos ainda)");
+        logArea.setText("(no logs yet)");
         VBox.setVgrow(logArea, Priority.ALWAYS);
 
-        // Tab in search jumps to log area; Ctrl+F from log area jumps back
+        // Ctrl+F from anywhere in the log view → search field
         logSearchField.setOnKeyPressed(e -> {
-            if (e.getCode() == KeyCode.TAB || e.getCode() == KeyCode.DOWN) {
+            if (e.getCode() == KeyCode.ESCAPE) {
+                logSearchField.clear();
                 logArea.requestFocus();
                 e.consume();
-            } else if (e.getCode() == KeyCode.ESCAPE) {
-                logSearchField.clear();
+            } else if (e.getCode() == KeyCode.TAB) {
+                logArea.requestFocus();
                 e.consume();
             }
         });
@@ -533,7 +533,7 @@ public class MainController implements TransferListener {
             String blockText = String.join("\n", block);
             if (blockText.toLowerCase().contains(lower)) sb.append(blockText).append("\n");
         }
-        logArea.setText(sb.length() > 0 ? sb.toString() : "(sem resultados para \"" + query + "\")");
+        logArea.setText(sb.length() > 0 ? sb.toString() : "(no results for \"" + query + "\")");
         logArea.setScrollTop(0);
     }
 
@@ -541,9 +541,9 @@ public class MainController implements TransferListener {
         try {
             logFullText = Files.exists(TransferLogger.LOG_FILE)
                     ? Files.readString(TransferLogger.LOG_FILE)
-                    : "(sem registos ainda)";
+                    : "(no logs yet)";
         } catch (IOException e) {
-            logFullText = "Erro ao ler o ficheiro de log.";
+            logFullText = "Error reading log file.";
         }
         String query = logSearchField != null ? logSearchField.getText() : "";
         applySearch(query);
@@ -582,7 +582,7 @@ public class MainController implements TransferListener {
     public boolean onIncomingRequest(String transferId, String senderName, String senderIp,
                                      List<TransferMessage.FileEntry> files, long totalSize, int totalFiles) {
         // Show the transfer entry immediately (shows overlay if not shown)
-        addToOverlay(transferId, senderName, senderIp, "RECEBER", files, totalSize);
+        addToOverlay(transferId, senderName, senderIp, "RECEIVE", files, totalSize);
 
         TransferRequestDialog dlg = new TransferRequestDialog(stage, senderName, senderIp, files, totalSize, totalFiles);
         boolean accepted = dlg.showAndWait();
@@ -645,7 +645,7 @@ public class MainController implements TransferListener {
             card.getStyleClass().add("overlay-card");
 
             // Direction + peer name
-            String dirStr = "ENVIAR".equals(direction) ? "↑" : "↓";
+            String dirStr = "SEND".equals(direction) ? "↑" : "↓";
             Label dirLabel = new Label(dirStr);
             dirLabel.getStyleClass().add("overlay-direction");
 
@@ -682,10 +682,10 @@ public class MainController implements TransferListener {
             detailLabel.getStyleClass().add("overlay-detail");
 
             // Status + open button
-            statusLabel = new Label("A aguardar...");
+            statusLabel = new Label("Waiting...");
             statusLabel.getStyleClass().add("overlay-status");
 
-            openBtn = new Button("Abrir pasta");
+            openBtn = new Button("Open folder");
             openBtn.getStyleClass().add("btn-secondary");
             openBtn.setStyle("-fx-font-size:11px; -fx-padding: 4 12 4 12;");
             openBtn.setVisible(false);
@@ -708,13 +708,13 @@ public class MainController implements TransferListener {
                 Label fname = new Label(f.isDirectory ? "▶  " + f.name : f.name);
                 fname.getStyleClass().add("overlay-file-name");
                 HBox sp = new HBox(); HBox.setHgrow(sp, Priority.ALWAYS);
-                Label fsize = new Label(f.isDirectory ? "pasta" : formatSize(f.size));
+                Label fsize = new Label(f.isDirectory ? "folder" : formatSize(f.size));
                 fsize.getStyleClass().add("overlay-file-size");
                 row.getChildren().addAll(fname, sp, fsize);
                 fileListBox.getChildren().add(row);
             }
             if (files.size() > 8) {
-                Label more = new Label("+ " + (files.size() - 8) + " ficheiro(s)");
+                Label more = new Label("+ " + (files.size() - 8) + " more file(s)");
                 more.getStyleClass().add("overlay-file-size");
                 fileListBox.getChildren().add(more);
             }
@@ -744,10 +744,10 @@ public class MainController implements TransferListener {
             this.status = s;
             statusLabel.getStyleClass().removeAll("done", "error", "rejected");
             String text = switch (s) {
-                case WAITING -> "A aguardar...";
-                case TRANSFERRING -> "A transferir...";
-                case DONE -> "✓  Concluído";
-                case REJECTED -> "—  Recusado";
+                case WAITING -> "Waiting...";
+                case TRANSFERRING -> "Transferring...";
+                case DONE -> "✓  Done";
+                case REJECTED -> "—  Rejected";
                 case ERROR -> "✗  Erro";
             };
             statusLabel.setText(text);
