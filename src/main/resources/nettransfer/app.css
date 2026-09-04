@@ -163,11 +163,24 @@
 .progress-bar .track { -fx-background-color: #252525; -fx-background-radius: 2; -fx-background-insets: 0; }
 
 /* ── Log area ── */
+.log-search {
+    -fx-background-color: #1a1a1a;
+    -fx-text-fill: #cccccc;
+    -fx-prompt-text-fill: #444444;
+    -fx-border-color: #2a2a2a;
+    -fx-border-radius: 6;
+    -fx-background-radius: 6;
+    -fx-padding: 7 12 7 12;
+    -fx-font-size: 12px;
+}
+
+.log-search:focused { -fx-border-color: #555555; }
+
 .log-area {
     -fx-control-inner-background: #0d0d0d;
     -fx-font-family: "JetBrains Mono", "Fira Mono", "DejaVu Sans Mono", monospace;
     -fx-font-size: 12px;
-    -fx-text-fill: #666666;
+    -fx-text-fill: #777777;
     -fx-border-width: 0;
     -fx-background-color: #0d0d0d;
     -fx-highlight-fill: #2a2a2a;

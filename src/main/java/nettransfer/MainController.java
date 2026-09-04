@@ -63,6 +63,8 @@ public class MainController implements TransferListener {
     private StackPane centerStack;
     private VBox devicesView;
     private TextArea logArea;
+    private javafx.scene.control.TextField logSearchField;
+    private String logFullText = "";
     private VBox overlayView;
     private VBox overlayCardContainer;
     private Button overlayDismissBtn;
@@ -127,15 +129,7 @@ public class MainController implements TransferListener {
         devicesView = buildDevicesView();
 
         // Log view
-        logArea = new TextArea();
-        logArea.getStyleClass().add("log-area");
-        logArea.setEditable(false);
-        logArea.setWrapText(false);
-        logArea.setText("(sem registos ainda)");
-
-        VBox logsView = new VBox(logArea);
-        logsView.setFillWidth(true);
-        VBox.setVgrow(logArea, Priority.ALWAYS);
+        VBox logsView = buildLogsView();
         logsView.setVisible(false);
 
         // Overlay (transfer in progress)
@@ -192,10 +186,9 @@ public class MainController implements TransferListener {
         chooseBtn.getStyleClass().add("btn-secondary");
         chooseBtn.setOnAction(e -> chooseFiles());
 
-        sendButton = new Button("Enviar  [Enter]");
+        sendButton = new Button("Enviar  [Ctrl+S]");
         sendButton.getStyleClass().add("btn-primary");
         sendButton.setDisable(true);
-        sendButton.setDefaultButton(true);
         sendButton.setOnAction(e -> sendToSelected());
 
         Button openBtn = new Button("Downloads");
@@ -255,18 +248,18 @@ public class MainController implements TransferListener {
     // ── Tab / overlay switching ───────────────────────────────────────────────
 
     private void switchTab(int tab) {
-        if (overlayView.isVisible()) return; // overlay blocks tab switching
+        if (overlayView.isVisible()) return;
         activeTab = tab;
         navDevices.getStyleClass().remove("active");
         navLogs.getStyleClass().remove("active");
         devicesView.setVisible(tab == 0);
-        centerStack.getChildren().get(1).setVisible(tab == 1); // logsView
+        centerStack.getChildren().get(1).setVisible(tab == 1);
         if (tab == 0) {
             navDevices.getStyleClass().add("active");
         } else {
             navLogs.getStyleClass().add("active");
             refreshLog();
-            logArea.requestFocus();
+            logSearchField.requestFocus();
         }
     }
 
@@ -313,25 +306,35 @@ public class MainController implements TransferListener {
         if (e.isControlDown() && e.getCode() == KeyCode.DIGIT1) { switchTab(0); e.consume(); return; }
         if (e.isControlDown() && e.getCode() == KeyCode.DIGIT2) { switchTab(1); e.consume(); return; }
 
-        // Overlay is showing
+        // Overlay activo — só fechar
         if (overlayView.isVisible()) {
-            if ((e.getCode() == KeyCode.ESCAPE || e.getCode() == KeyCode.ENTER)
+            if ((e.getCode() == KeyCode.ESCAPE || (e.isControlDown() && e.getCode() == KeyCode.S))
                     && !overlayDismissBtn.isDisabled()) {
                 dismissOverlay();
                 e.consume();
             }
-            return; // block all other keys when overlay active
+            return;
         }
 
-        // Log view has its own scroll — don't intercept arrows
-        if (activeTab == 1 && logArea.isFocused()) return;
+        // Na aba de registos não interceptar nada (deixar a TextArea e o campo de pesquisa gerir tudo)
+        if (activeTab == 1) return;
 
         switch (e.getCode()) {
-            case F      -> { chooseFiles(); e.consume(); }
-            case ENTER  -> { if (!sendButton.isDisabled()) { sendToSelected(); e.consume(); } }
+            case F -> { chooseFiles(); e.consume(); }
+            case S -> {
+                if (e.isControlDown() && !sendButton.isDisabled()) { sendToSelected(); e.consume(); }
+            }
             case ESCAPE -> { selectedFiles.clear(); filesLabel.setText("Nenhum ficheiro selecionado"); updateSendButton(); e.consume(); }
-            case LEFT,  UP   -> { navigateCards(-1, e.isShiftDown()); e.consume(); }
+            case LEFT, UP   -> { navigateCards(-1, e.isShiftDown()); e.consume(); }
             case RIGHT, DOWN -> { navigateCards(+1, e.isShiftDown()); e.consume(); }
+            case ENTER, SPACE -> {
+                // Selecionar/desselecionar o card com foco
+                List<DeviceCard> list = new ArrayList<>(cards.values());
+                if (!list.isEmpty() && focusedCardIndex >= 0 && focusedCardIndex < list.size()) {
+                    list.get(focusedCardIndex).toggle();
+                    e.consume();
+                }
+            }
             case A -> { if (e.isControlDown()) { selectAll(); e.consume(); } }
             default -> {}
         }
@@ -449,16 +452,101 @@ public class MainController implements TransferListener {
 
     // ── Logs ─────────────────────────────────────────────────────────────────
 
+    private VBox buildLogsView() {
+        // Search bar
+        logSearchField = new javafx.scene.control.TextField();
+        logSearchField.setPromptText("Pesquisar nos registos...");
+        logSearchField.getStyleClass().add("log-search");
+        logSearchField.textProperty().addListener((obs, old, val) -> applySearch(val));
+
+        Button clearSearch = new Button("✕");
+        clearSearch.getStyleClass().add("btn-secondary");
+        clearSearch.setStyle("-fx-font-size:11px; -fx-padding: 6 10 6 10;");
+        clearSearch.setOnAction(e -> { logSearchField.clear(); logSearchField.requestFocus(); });
+
+        Button openLogBtn = new Button("Abrir ficheiro");
+        openLogBtn.getStyleClass().add("btn-secondary");
+        openLogBtn.setStyle("-fx-font-size:11px; -fx-padding: 6 10 6 10;");
+        openLogBtn.setOnAction(e -> openFolder(FileTransferService.DOWNLOAD_BASE.toString()));
+
+        HBox searchBar = new HBox(8, logSearchField, clearSearch, openLogBtn);
+        searchBar.setAlignment(Pos.CENTER_LEFT);
+        searchBar.setPadding(new Insets(12, 20, 10, 20));
+        HBox.setHgrow(logSearchField, Priority.ALWAYS);
+
+        // Log text area — scrollable with arrows when focused
+        logArea = new TextArea();
+        logArea.getStyleClass().add("log-area");
+        logArea.setEditable(false);
+        logArea.setWrapText(false);
+        logArea.setText("(sem registos ainda)");
+        VBox.setVgrow(logArea, Priority.ALWAYS);
+
+        // Tab in search jumps to log area; Ctrl+F from log area jumps back
+        logSearchField.setOnKeyPressed(e -> {
+            if (e.getCode() == KeyCode.TAB || e.getCode() == KeyCode.DOWN) {
+                logArea.requestFocus();
+                e.consume();
+            } else if (e.getCode() == KeyCode.ESCAPE) {
+                logSearchField.clear();
+                e.consume();
+            }
+        });
+        logArea.setOnKeyPressed(e -> {
+            if (e.isControlDown() && e.getCode() == KeyCode.F) {
+                logSearchField.requestFocus();
+                logSearchField.selectAll();
+                e.consume();
+            }
+        });
+
+        VBox view = new VBox(0, searchBar, logArea);
+        view.setFillWidth(true);
+        VBox.setVgrow(logArea, Priority.ALWAYS);
+        return view;
+    }
+
+    private void applySearch(String query) {
+        if (query == null || query.isBlank()) {
+            logArea.setText(logFullText);
+            logArea.setScrollTop(Double.MAX_VALUE);
+            return;
+        }
+        String lower = query.toLowerCase();
+        String[] lines = logFullText.split("\n");
+        StringBuilder sb = new StringBuilder();
+        // Show blocks: a block starts at "──" separator lines
+        // Include the whole block if any line matches
+        List<String> block = new ArrayList<>();
+        for (String line : lines) {
+            if (line.contains("──") && !block.isEmpty()) {
+                String blockText = String.join("\n", block);
+                if (blockText.toLowerCase().contains(lower)) {
+                    sb.append(blockText).append("\n");
+                }
+                block.clear();
+            }
+            block.add(line);
+        }
+        // Last block
+        if (!block.isEmpty()) {
+            String blockText = String.join("\n", block);
+            if (blockText.toLowerCase().contains(lower)) sb.append(blockText).append("\n");
+        }
+        logArea.setText(sb.length() > 0 ? sb.toString() : "(sem resultados para \"" + query + "\")");
+        logArea.setScrollTop(0);
+    }
+
     private void refreshLog() {
         try {
-            String text = Files.exists(TransferLogger.LOG_FILE)
+            logFullText = Files.exists(TransferLogger.LOG_FILE)
                     ? Files.readString(TransferLogger.LOG_FILE)
                     : "(sem registos ainda)";
-            logArea.setText(text);
-            logArea.setScrollTop(Double.MAX_VALUE);
         } catch (IOException e) {
-            logArea.setText("Erro ao ler o ficheiro de log.");
+            logFullText = "Erro ao ler o ficheiro de log.";
         }
+        String query = logSearchField != null ? logSearchField.getText() : "";
+        applySearch(query);
     }
 
     // ── Utilities ─────────────────────────────────────────────────────────────
