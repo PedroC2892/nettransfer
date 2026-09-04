@@ -19,6 +19,7 @@ public class TransferMessage {
     public String relativePath;
     public long size;
     public boolean isDirectory;
+    public String fileHash;
 
     public static class FileEntry {
         public String name;
@@ -63,11 +64,12 @@ public class TransferMessage {
         return m;
     }
 
-    public static TransferMessage fileEnd(String transferId, String relativePath) {
+    public static TransferMessage fileEnd(String transferId, String relativePath, String fileHash) {
         TransferMessage m = new TransferMessage();
         m.type = "FILE_END";
         m.transferId = transferId;
         m.relativePath = relativePath;
+        m.fileHash = fileHash;
         return m;
     }
 

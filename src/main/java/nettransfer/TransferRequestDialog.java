@@ -26,11 +26,12 @@ public class TransferRequestDialog {
     private final int totalFiles;
     private final long usableSpace;
     private final boolean enoughSpace;
+    private final String verificationCode;
     private boolean accepted = false;
 
     public TransferRequestDialog(Stage owner, String senderName, String senderIp,
                                   List<TransferMessage.FileEntry> files, long totalSize, int totalFiles,
-                                  long usableSpace, boolean enoughSpace) {
+                                  long usableSpace, boolean enoughSpace, String verificationCode) {
         this.owner = owner;
         this.senderName = senderName;
         this.senderIp = senderIp;
@@ -39,6 +40,7 @@ public class TransferRequestDialog {
         this.totalFiles = totalFiles;
         this.usableSpace = usableSpace;
         this.enoughSpace = enoughSpace;
+        this.verificationCode = verificationCode;
     }
 
     public boolean showAndWait() {
@@ -58,6 +60,15 @@ public class TransferRequestDialog {
         Label sender = new Label(senderName + "  ·  " + senderIp);
         sender.getStyleClass().add("dialog-sender");
         header.getChildren().addAll(title, sender);
+
+        // Verification code (MITM defence)
+        Label verifyHint = new Label("Verification code — must match on both devices");
+        verifyHint.getStyleClass().add("verify-label");
+        Label verifyCode = new Label(verificationCode != null ? verificationCode : "——————");
+        verifyCode.getStyleClass().add("verify-code");
+        VBox verifyBox = new VBox(4, verifyHint, verifyCode);
+        verifyBox.getStyleClass().add("verify-box");
+        VBox.setMargin(verifyBox, new Insets(14, 22, 0, 22));
 
         // File list
         VBox fileList = new VBox(0);
@@ -127,7 +138,7 @@ public class TransferRequestDialog {
         btnRow.setAlignment(Pos.CENTER_RIGHT);
         btnRow.setPadding(new Insets(14, 22, 18, 22));
 
-        root.getChildren().addAll(header, scroll, summary, spaceWarning, btnRow);
+        root.getChildren().addAll(header, verifyBox, scroll, summary, spaceWarning, btnRow);
 
         Scene scene = new Scene(root);
         scene.getStylesheets().add(getClass().getResource("app.css").toExternalForm());

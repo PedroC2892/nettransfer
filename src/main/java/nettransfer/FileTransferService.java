@@ -18,9 +18,11 @@ import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.stream.Collectors;
@@ -80,6 +82,7 @@ public class FileTransferService {
                 socket.connect(new InetSocketAddress(peer.ipAddress, peer.tcpPort), 5000);
 
                 Handshake hs = Handshake.forSender(socket.getInputStream(), socket.getOutputStream());
+                listener.onVerificationCode(transferId, hs.getVerificationCode());
                 OutputStream encOut = new EncryptedOutputStream(socket.getOutputStream(), hs);
                 InputStream encIn = new EncryptedInputStream(socket.getInputStream(), hs);
                 DataOutputStream out = new DataOutputStream(new BufferedOutputStream(encOut));
@@ -105,10 +108,12 @@ public class FileTransferService {
                         continue;
                     }
                     TransferMessage.fileStart(transferId, entry.relativePath, entry.size, false).writeTo(out, gson);
+                    MessageDigest digest = newSha256();
                     try (FileInputStream fis = new FileInputStream(entry.file)) {
                         int read;
                         while ((read = fis.read(buffer)) != -1) {
                             out.write(buffer, 0, read);
+                            digest.update(buffer, 0, read);
                             transferred += read;
                             sentBytes = transferred;
                             long now = System.currentTimeMillis();
@@ -120,7 +125,8 @@ public class FileTransferService {
                         }
                     }
                     out.flush();
-                    TransferMessage.fileEnd(transferId, entry.relativePath).writeTo(out, gson);
+                    String hash = HexFormat.of().formatHex(digest.digest());
+                    TransferMessage.fileEnd(transferId, entry.relativePath, hash).writeTo(out, gson);
                 }
 
                 TransferMessage.transferComplete(transferId).writeTo(out, gson);
@@ -162,7 +168,7 @@ public class FileTransferService {
             long usableSpace = Files.getFileStore(DOWNLOAD_BASE).getUsableSpace();
             boolean enoughSpace = usableSpace >= request.totalSize + SPACE_SAFETY_MARGIN;
 
-            boolean accepted = waitForUiResponse(listener, finalRequest, finalIp, usableSpace, enoughSpace);
+            boolean accepted = waitForUiResponse(listener, finalRequest, finalIp, usableSpace, enoughSpace, hs.getVerificationCode());
 
             TransferMessage.transferResponse(request.transferId, accepted).writeTo(out, gson);
             if (!accepted) {
@@ -204,6 +210,7 @@ public class FileTransferService {
                 target = uniquePath(target);
                 writtenFiles.add(target);
 
+                MessageDigest digest = newSha256();
                 try (FileOutputStream fos = new FileOutputStream(target.toFile())) {
                     long remaining = msg.size;
                     while (remaining > 0) {
@@ -211,6 +218,7 @@ public class FileTransferService {
                         int read = in.read(buffer, 0, toRead);
                         if (read == -1) throw new EOFException("Ligacao fechada durante a transferencia");
                         fos.write(buffer, 0, read);
+                        digest.update(buffer, 0, read);
                         remaining -= read;
                         transferred += read;
                         recvBytes = transferred;
@@ -222,7 +230,13 @@ public class FileTransferService {
                         }
                     }
                 }
-                TransferMessage.readFrom(in, gson); // FILE_END
+                TransferMessage fileEnd = TransferMessage.readFrom(in, gson); // FILE_END
+                String actualHash = HexFormat.of().formatHex(digest.digest());
+                if (fileEnd.fileHash != null && !fileEnd.fileHash.equalsIgnoreCase(actualHash)) {
+                    Files.deleteIfExists(target);
+                    TransferLogger.logIntegrityError(request.transferId, msg.relativePath, fileEnd.fileHash, actualHash);
+                    throw new IOException("File integrity check failed: " + msg.relativePath);
+                }
             }
         } catch (Exception e) {
             String id = request != null ? request.transferId : "unknown";
@@ -258,15 +272,23 @@ public class FileTransferService {
         if (removed > 0) TransferLogger.logPartialCleanup(transferId, removed, freed);
     }
 
+    private static MessageDigest newSha256() {
+        try {
+            return MessageDigest.getInstance("SHA-256");
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
     private static boolean waitForUiResponse(TransferListener listener, TransferMessage request, String senderIp,
-                                              long usableSpace, boolean enoughSpace) {
+                                              long usableSpace, boolean enoughSpace, String verificationCode) {
         boolean[] result = {false};
         CountDownLatch latch = new CountDownLatch(1);
         Platform.runLater(() -> {
             result[0] = listener.onIncomingRequest(
                     request.transferId, request.senderName, senderIp,
                     request.files, request.totalSize, request.totalFiles,
-                    usableSpace, enoughSpace);
+                    usableSpace, enoughSpace, verificationCode);
             latch.countDown();
         });
         try { latch.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }

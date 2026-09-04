@@ -9,14 +9,19 @@ import java.io.InputStream;
 
 /**
  * Counterpart to EncryptedOutputStream. Reads length-prefixed encrypted records
- * and decrypts each one with AES-256-GCM, authenticating the tag.
+ * and decrypts each one with AES-256-GCM using a deterministic sequential nonce,
+ * authenticating the tag. A wrong-position record (reordered, replayed, dropped)
+ * fails authentication immediately because the expected IV no longer matches.
  */
 public class EncryptedInputStream extends InputStream {
+
+    private static final int MAX_RECORD_SIZE = 1024 * 1024; // 1 MB — DoS guard
 
     private final DataInputStream source;
     private final Handshake crypto;
     private byte[] decrypted = new byte[0];
     private int decryptedPos = 0;
+    private long counter = 0;
 
     public EncryptedInputStream(InputStream in, Handshake crypto) {
         this.source = new DataInputStream(in);
@@ -49,20 +54,32 @@ public class EncryptedInputStream extends InputStream {
         } catch (EOFException e) {
             return false;
         }
+        if (recordLen <= 0 || recordLen > MAX_RECORD_SIZE) {
+            throw new IOException("Invalid record length: " + recordLen);
+        }
         byte[] record = new byte[recordLen];
         source.readFully(record);
 
-        byte[] iv = new byte[12];
-        System.arraycopy(record, 0, iv, 0, 12);
-        int ctLen = recordLen - 12;
+        byte[] iv = nextIv();
         try {
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
             cipher.init(Cipher.DECRYPT_MODE, crypto.aesKey, new GCMParameterSpec(128, iv));
-            decrypted = cipher.doFinal(record, 12, ctLen);
+            decrypted = cipher.doFinal(record);
             decryptedPos = 0;
             return true;
         } catch (Exception e) {
-            throw new IOException("AES-GCM decryption failed (tampered data?)", e);
+            throw new IOException("AES-GCM decryption failed (tampered, reordered or replayed data?)", e);
         }
+    }
+
+    private byte[] nextIv() {
+        byte[] prefix = crypto.getRecvNoncePrefix();
+        byte[] iv = new byte[12];
+        System.arraycopy(prefix, 0, iv, 0, 4);
+        long c = counter++;
+        for (int i = 0; i < 8; i++) {
+            iv[4 + i] = (byte) (c >>> (8 * (7 - i)));
+        }
+        return iv;
     }
 }

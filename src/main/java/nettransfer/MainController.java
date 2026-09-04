@@ -906,17 +906,25 @@ public class MainController implements TransferListener {
     @Override
     public boolean onIncomingRequest(String transferId, String senderName, String senderIp,
                                      List<TransferMessage.FileEntry> files, long totalSize, int totalFiles,
-                                     long usableSpace, boolean enoughSpace) {
+                                     long usableSpace, boolean enoughSpace, String verificationCode) {
         // Show the transfer entry immediately (shows overlay if not shown)
         addToOverlay(transferId, senderName, senderIp, "RECEIVE", files, totalSize);
 
         TransferRequestDialog dlg = new TransferRequestDialog(stage, senderName, senderIp, files, totalSize, totalFiles,
-                usableSpace, enoughSpace);
+                usableSpace, enoughSpace, verificationCode);
         boolean accepted = dlg.showAndWait();
 
         ActiveTransfer at = activeTransfers.get(transferId);
         if (at != null) at.setStatus(accepted ? TransferStatus.TRANSFERRING : TransferStatus.REJECTED);
         return accepted;
+    }
+
+    @Override
+    public void onVerificationCode(String transferId, String code) {
+        Platform.runLater(() -> {
+            ActiveTransfer at = activeTransfers.get(transferId);
+            if (at != null) at.setVerificationCode(code);
+        });
     }
 
     @Override
@@ -959,6 +967,8 @@ public class MainController implements TransferListener {
         private final Button openBtn;
         private final VBox fileListBox;
         private final Label peerNameLabel, peerIpLabel;
+        private final Label verifyCodeLabel;
+        private final VBox verifyBox;
 
         ActiveTransfer(String id, String peerName, String peerIp, String direction,
                        List<TransferMessage.FileEntry> files, long totalSize) {
@@ -987,6 +997,16 @@ public class MainController implements TransferListener {
             VBox.setMargin(peerIpLabel, new Insets(0, 0, 0, 24));
 
             VBox headerBox = new VBox(3, nameRow, peerIpLabel);
+
+            // Verification code (MITM defence) — shown once the handshake completes
+            Label verifyHint = new Label("Verification code — must match on both devices");
+            verifyHint.getStyleClass().add("verify-label");
+            verifyCodeLabel = new Label("——————");
+            verifyCodeLabel.getStyleClass().add("verify-code");
+            verifyBox = new VBox(4, verifyHint, verifyCodeLabel);
+            verifyBox.getStyleClass().add("verify-box");
+            verifyBox.setVisible("SEND".equals(direction));
+            verifyBox.setManaged("SEND".equals(direction));
 
             // File list
             fileListBox = new VBox(3);
@@ -1023,7 +1043,11 @@ public class MainController implements TransferListener {
             HBox statusRow = new HBox(8, statusLabel, sp, openBtn);
             statusRow.setAlignment(Pos.CENTER_LEFT);
 
-            card.getChildren().addAll(headerBox, fileListBox, progressRow, detailLabel, statusRow);
+            card.getChildren().addAll(headerBox, verifyBox, fileListBox, progressRow, detailLabel, statusRow);
+        }
+
+        void setVerificationCode(String code) {
+            verifyCodeLabel.setText(code);
         }
 
         private void populateFiles(List<TransferMessage.FileEntry> files) {
