@@ -22,6 +22,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -37,29 +38,35 @@ public class FileTransferService {
         return DOWNLOAD_BASE.toString();
     }
 
-    public static void sendFiles(Peer peer, List<File> selectedFiles, String transferId, String senderName, TransferListener listener) {
+    public static void sendFiles(Peer peer, List<File> selectedFiles, String transferId,
+                                  String senderName, TransferListener listener) {
         Thread t = new Thread(() -> doSend(peer, selectedFiles, transferId, senderName, listener));
         t.setDaemon(true);
         t.start();
     }
 
-    private static void doSend(Peer peer, List<File> selectedFiles, String transferId, String senderName, TransferListener listener) {
+    private static void doSend(Peer peer, List<File> selectedFiles, String transferId,
+                                String senderName, TransferListener listener) {
         Gson gson = new Gson();
+        long startTime = System.currentTimeMillis();
+        List<TransferMessage.FileEntry> fileEntries = null;
+        long totalSize = 0;
         try {
             List<PreparedFile> entries = expand(selectedFiles);
-            long totalSize = entries.stream().filter(e -> !e.isDirectory).mapToLong(e -> e.size).sum();
+            totalSize = entries.stream().filter(e -> !e.isDirectory).mapToLong(e -> e.size).sum();
             int totalFiles = (int) entries.stream().filter(e -> !e.isDirectory).count();
-            List<TransferMessage.FileEntry> fileEntries = entries.stream()
+            fileEntries = entries.stream()
                     .map(e -> new TransferMessage.FileEntry(baseName(e.relativePath), e.relativePath, e.size, e.isDirectory))
                     .collect(Collectors.toList());
+
+            // Log and notify UI before connecting
+            TransferLogger.logSendStart(transferId, peer.name, peer.ipAddress, fileEntries, totalSize);
+            listener.onSendStart(transferId, peer.name, peer.ipAddress, fileEntries, totalSize);
 
             try (Socket socket = new Socket()) {
                 socket.connect(new InetSocketAddress(peer.ipAddress, peer.tcpPort), 5000);
 
-                // ECDH handshake — sender goes first
                 Handshake hs = Handshake.forSender(socket.getInputStream(), socket.getOutputStream());
-
-                // All further I/O is encrypted
                 OutputStream encOut = new EncryptedOutputStream(socket.getOutputStream(), hs);
                 InputStream encIn = new EncryptedInputStream(socket.getInputStream(), hs);
                 DataOutputStream out = new DataOutputStream(new BufferedOutputStream(encOut));
@@ -69,13 +76,13 @@ public class FileTransferService {
 
                 TransferMessage response = TransferMessage.readFrom(in, gson);
                 if (!response.accepted) {
+                    TransferLogger.logSendRejected(transferId, peer.name);
                     listener.onStatusChange(transferId, TransferStatus.REJECTED);
                     return;
                 }
 
                 listener.onStatusChange(transferId, TransferStatus.TRANSFERRING);
                 long transferred = 0;
-                long startTime = System.currentTimeMillis();
                 long lastCallback = 0;
                 byte[] buffer = new byte[64 * 1024];
 
@@ -103,9 +110,12 @@ public class FileTransferService {
                 }
 
                 TransferMessage.transferComplete(transferId).writeTo(out, gson);
+                long elapsed = System.currentTimeMillis() - startTime;
+                TransferLogger.logSendDone(transferId, peer.name, totalSize, elapsed);
                 listener.onStatusChange(transferId, TransferStatus.DONE);
             }
         } catch (Exception e) {
+            TransferLogger.logSendError(transferId, peer.name);
             listener.onStatusChange(transferId, TransferStatus.ERROR);
         }
     }
@@ -113,10 +123,10 @@ public class FileTransferService {
     public static void handleIncoming(Socket socket, TransferListener listener) {
         Gson gson = new Gson();
         TransferMessage request = null;
+        String senderIp = socket.getInetAddress().getHostAddress();
+        long startTime = System.currentTimeMillis();
         try {
-            // ECDH handshake — receiver goes second
             Handshake hs = Handshake.forReceiver(socket.getInputStream(), socket.getOutputStream());
-
             InputStream encIn = new EncryptedInputStream(socket.getInputStream(), hs);
             OutputStream encOut = new EncryptedOutputStream(socket.getOutputStream(), hs);
             DataInputStream in = new DataInputStream(new BufferedInputStream(encIn));
@@ -124,10 +134,17 @@ public class FileTransferService {
 
             request = TransferMessage.readFrom(in, gson);
             final TransferMessage finalRequest = request;
-            boolean accepted = waitForUiResponse(listener, finalRequest);
+            final String finalIp = senderIp;
+
+            // Log the incoming request
+            TransferLogger.logReceiveRequest(request.transferId, request.senderName, senderIp,
+                    request.files, request.totalSize);
+
+            boolean accepted = waitForUiResponse(listener, finalRequest, finalIp);
 
             TransferMessage.transferResponse(request.transferId, accepted).writeTo(out, gson);
             if (!accepted) {
+                TransferLogger.logReceiveRejected(request.transferId);
                 listener.onStatusChange(request.transferId, TransferStatus.REJECTED);
                 return;
             }
@@ -137,16 +154,20 @@ public class FileTransferService {
             String timestamp = LocalDateTime.now().format(FOLDER_FMT);
             Path destBase = DOWNLOAD_BASE.resolve(timestamp).toAbsolutePath().normalize();
             Files.createDirectories(destBase);
+
+            TransferLogger.logReceiveAccepted(request.transferId, destBase.toString());
             listener.onReceiveDir(request.transferId, destBase.toString());
 
             long transferred = 0;
-            long startTime = System.currentTimeMillis();
             long lastCallback = 0;
             byte[] buffer = new byte[64 * 1024];
 
             while (true) {
                 TransferMessage msg = TransferMessage.readFrom(in, gson);
                 if ("TRANSFER_COMPLETE".equals(msg.type)) {
+                    long elapsed = System.currentTimeMillis() - startTime;
+                    TransferLogger.logReceiveDone(request.transferId, request.senderName,
+                            request.totalSize, elapsed);
                     listener.onStatusChange(request.transferId, TransferStatus.DONE);
                     break;
                 }
@@ -181,28 +202,23 @@ public class FileTransferService {
             }
         } catch (Exception e) {
             String id = request != null ? request.transferId : "desconhecido";
+            TransferLogger.logReceiveError(id);
             listener.onStatusChange(id, TransferStatus.ERROR);
         } finally {
             try { socket.close(); } catch (IOException ignored) {}
         }
     }
 
-    private static boolean waitForUiResponse(TransferListener listener, TransferMessage request) {
-        // The listener.onIncomingRequest blocks via a modal JavaFX dialog on the FX thread,
-        // but we're on a background thread. We use a CountDownLatch pattern via the holder array.
+    private static boolean waitForUiResponse(TransferListener listener, TransferMessage request, String senderIp) {
         boolean[] result = {false};
-        java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
+        CountDownLatch latch = new CountDownLatch(1);
         Platform.runLater(() -> {
             result[0] = listener.onIncomingRequest(
-                    request.transferId, request.senderName, request.files,
-                    request.totalSize, request.totalFiles);
+                    request.transferId, request.senderName, senderIp,
+                    request.files, request.totalSize, request.totalFiles);
             latch.countDown();
         });
-        try {
-            latch.await();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        try { latch.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
         return result[0];
     }
 

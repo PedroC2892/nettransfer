@@ -258,7 +258,9 @@ public class MainController implements TransferListener {
             Peer peer = peers.get(peerId);
             if (peer == null) continue;
             String tid = UUID.randomUUID().toString();
-            TransferProgressPanel panel = new TransferProgressPanel(peer.name, null);
+            // Panel created with placeholder — file list arrives via onSendStart
+            TransferProgressPanel panel = new TransferProgressPanel(
+                    peer.name, null, peer.ipAddress, "ENVIAR", null, 0);
             progressPanels.put(tid, panel);
             Platform.runLater(() -> progressContainer.getChildren().add(0, panel.node()));
             FileTransferService.sendFiles(peer, toSend, tid, senderName, this);
@@ -273,10 +275,23 @@ public class MainController implements TransferListener {
         updateSendButton();
     }
 
+    @Override
+    public void onSendStart(String transferId, String peerName, String peerIp,
+                             List<TransferMessage.FileEntry> files, long totalSize) {
+        Platform.runLater(() -> {
+            TransferProgressPanel panel = progressPanels.get(transferId);
+            if (panel != null) panel.setFileDetails(files, totalSize, peerIp);
+        });
+    }
+
     public void onPeerDiscovered(Peer peer) {
         Platform.runLater(() -> {
+            boolean isNew = !peers.containsKey(peer.id);
             peers.put(peer.id, peer);
             lastSeen.put(peer.id, System.currentTimeMillis());
+            if (isNew) {
+                TransferLogger.logPeerDiscovered(peer.name, peer.ipAddress, peer.tcpPort);
+            }
             DeviceCard card = cards.get(peer.id);
             if (card == null) {
                 card = new DeviceCard(peer);
@@ -295,11 +310,12 @@ public class MainController implements TransferListener {
         List<String> stale = new ArrayList<>();
         lastSeen.forEach((id, ts) -> { if (now - ts > PEER_TIMEOUT_MS) stale.add(id); });
         for (String id : stale) {
-            peers.remove(id);
+            Peer lost = peers.remove(id);
             lastSeen.remove(id);
             selectedPeerIds.remove(id);
             DeviceCard card = cards.remove(id);
             if (card != null) cardsPane.getChildren().remove(card.node());
+            if (lost != null) TransferLogger.logPeerLost(lost.name, lost.ipAddress);
         }
         boolean empty = cards.isEmpty();
         cardsPane.setVisible(!empty);
@@ -329,18 +345,18 @@ public class MainController implements TransferListener {
     // ── TransferListener ──
 
     @Override
-    public boolean onIncomingRequest(String transferId, String senderName,
+    public boolean onIncomingRequest(String transferId, String senderName, String senderIp,
                                      List<TransferMessage.FileEntry> files,
                                      long totalSize, int totalFiles) {
-        TransferProgressPanel panel = new TransferProgressPanel(senderName, null);
+        TransferProgressPanel panel = new TransferProgressPanel(
+                senderName, null, senderIp, "RECEBER", files, totalSize);
         progressPanels.put(transferId, panel);
         Platform.runLater(() -> progressContainer.getChildren().add(0, panel.node()));
 
-        // Show modal dialog on FX thread and block until answered
         boolean[] result = {false};
         java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
         Platform.runLater(() -> {
-            TransferRequestDialog dlg = new TransferRequestDialog(stage, senderName, files, totalSize, totalFiles);
+            TransferRequestDialog dlg = new TransferRequestDialog(stage, senderName, senderIp, files, totalSize, totalFiles);
             result[0] = dlg.showAndWait();
             latch.countDown();
         });

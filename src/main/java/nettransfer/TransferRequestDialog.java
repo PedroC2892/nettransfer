@@ -24,9 +24,13 @@ public class TransferRequestDialog {
     private final int totalFiles;
     private boolean accepted = false;
 
-    public TransferRequestDialog(Stage owner, String senderName, List<TransferMessage.FileEntry> files, long totalSize, int totalFiles) {
+    private final String senderIp;
+
+    public TransferRequestDialog(Stage owner, String senderName, String senderIp,
+                                  List<TransferMessage.FileEntry> files, long totalSize, int totalFiles) {
         this.owner = owner;
         this.senderName = senderName;
+        this.senderIp = senderIp;
         this.files = files;
         this.totalSize = totalSize;
         this.totalFiles = totalFiles;
@@ -49,7 +53,7 @@ public class TransferRequestDialog {
         header.setStyle("-fx-background-radius: 12 12 0 0;");
         Label title = new Label("Pedido de transferência");
         title.getStyleClass().add("dialog-title");
-        Label sender = new Label("De: " + senderName);
+        Label sender = new Label("De: " + senderName + "  ·  " + senderIp);
         sender.getStyleClass().add("dialog-sender");
         header.getChildren().addAll(title, sender);
 
