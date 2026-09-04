@@ -179,13 +179,15 @@
 .log-area {
     -fx-control-inner-background: #0d0d0d;
     -fx-font-family: "JetBrains Mono", "Fira Mono", "DejaVu Sans Mono", monospace;
-    -fx-font-size: 12px;
-    -fx-text-fill: #aaaaaa;
+    -fx-text-fill: #e6e6e6;
     -fx-border-width: 0;
     -fx-background-color: #0d0d0d;
-    -fx-highlight-fill: #2a2a2a;
-    -fx-highlight-text-fill: #e8e8e8;
+    -fx-highlight-fill: #3a3a3a;
+    -fx-highlight-text-fill: #ffffff;
 }
+
+.log-area .content { -fx-background-color: #0d0d0d; }
+.log-area .text    { -fx-fill: #e6e6e6; }
 
 /* ── Transfer request dialog ── */
 .dialog-header {

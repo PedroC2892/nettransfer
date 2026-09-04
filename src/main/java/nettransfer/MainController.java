@@ -65,6 +65,9 @@ public class MainController implements TransferListener {
     private TextArea logArea;
     private javafx.scene.control.TextField logSearchField;
     private String logFullText = "";
+    private String logShownText = "";
+    private double logFontSize = 13;
+    private boolean logStickToBottom = true;
     private VBox overlayView;
     private VBox overlayCardContainer;
     private Button overlayDismissBtn;
@@ -453,23 +456,36 @@ public class MainController implements TransferListener {
     // ── Logs ─────────────────────────────────────────────────────────────────
 
     private VBox buildLogsView() {
-        // Search bar
         logSearchField = new javafx.scene.control.TextField();
-        logSearchField.setPromptText("Search logs...  [Ctrl+F]");
+        logSearchField.setPromptText("Search logs...");
         logSearchField.getStyleClass().add("log-search");
         logSearchField.textProperty().addListener((obs, old, val) -> applySearch(val));
 
         Button clearSearch = new Button("✕");
         clearSearch.getStyleClass().add("btn-secondary");
         clearSearch.setStyle("-fx-font-size:11px; -fx-padding: 6 10 6 10;");
+        clearSearch.setFocusTraversable(false);
         clearSearch.setOnAction(e -> { logSearchField.clear(); logArea.requestFocus(); });
+
+        Button zoomOut = new Button("−");
+        zoomOut.getStyleClass().add("btn-secondary");
+        zoomOut.setStyle("-fx-font-size:13px; -fx-padding: 4 12 4 12;");
+        zoomOut.setFocusTraversable(false);
+        zoomOut.setOnAction(e -> { changeLogZoom(-1); logArea.requestFocus(); });
+
+        Button zoomIn = new Button("+");
+        zoomIn.getStyleClass().add("btn-secondary");
+        zoomIn.setStyle("-fx-font-size:13px; -fx-padding: 4 12 4 12;");
+        zoomIn.setFocusTraversable(false);
+        zoomIn.setOnAction(e -> { changeLogZoom(+1); logArea.requestFocus(); });
 
         Button openLogBtn = new Button("Open folder");
         openLogBtn.getStyleClass().add("btn-secondary");
         openLogBtn.setStyle("-fx-font-size:11px; -fx-padding: 6 10 6 10;");
+        openLogBtn.setFocusTraversable(false);
         openLogBtn.setOnAction(e -> openFolder(FileTransferService.DOWNLOAD_BASE.toString()));
 
-        HBox searchBar = new HBox(8, logSearchField, clearSearch, openLogBtn);
+        HBox searchBar = new HBox(8, logSearchField, clearSearch, zoomOut, zoomIn, openLogBtn);
         searchBar.setAlignment(Pos.CENTER_LEFT);
         searchBar.setPadding(new Insets(12, 20, 10, 20));
         HBox.setHgrow(logSearchField, Priority.ALWAYS);
@@ -479,23 +495,54 @@ public class MainController implements TransferListener {
         logArea.setEditable(false);
         logArea.setWrapText(false);
         logArea.setText("(no logs yet)");
+        logArea.setFocusTraversable(true);
+        applyLogFont();
         VBox.setVgrow(logArea, Priority.ALWAYS);
 
-        // Ctrl+F from anywhere in the log view → search field
+        // Track whether the user is parked at the bottom; only auto-follow then.
+        logArea.scrollTopProperty().addListener((obs, old, val) -> {
+            double max = logArea.getHeight() > 0 ? Math.max(0, logArea.getHeight()) : 0;
+            logStickToBottom = val.doubleValue() >= max - 4;
+        });
+
         logSearchField.setOnKeyPressed(e -> {
             if (e.getCode() == KeyCode.ESCAPE) {
                 logSearchField.clear();
                 logArea.requestFocus();
                 e.consume();
-            } else if (e.getCode() == KeyCode.TAB) {
+            } else if (e.getCode() == KeyCode.TAB || e.getCode() == KeyCode.ENTER) {
                 logArea.requestFocus();
                 e.consume();
             }
         });
-        logArea.setOnKeyPressed(e -> {
-            if (e.isControlDown() && e.getCode() == KeyCode.F) {
-                logSearchField.requestFocus();
-                logSearchField.selectAll();
+
+        // Arrows / PageUp / PageDown / Home / End scroll the log; Ctrl+/- zooms.
+        logArea.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
+            if (e.isControlDown()) {
+                switch (e.getCode()) {
+                    case F -> { logSearchField.requestFocus(); logSearchField.selectAll(); e.consume(); }
+                    case PLUS, EQUALS, ADD -> { changeLogZoom(+1); e.consume(); }
+                    case MINUS, SUBTRACT -> { changeLogZoom(-1); e.consume(); }
+                    case DIGIT0, NUMPAD0 -> { logFontSize = 13; applyLogFont(); e.consume(); }
+                    default -> {}
+                }
+                return;
+            }
+            switch (e.getCode()) {
+                case DOWN     -> { scrollLog(+24);  e.consume(); }
+                case UP       -> { scrollLog(-24);  e.consume(); }
+                case PAGE_DOWN-> { scrollLog(+logArea.getHeight() * 0.85); e.consume(); }
+                case PAGE_UP  -> { scrollLog(-logArea.getHeight() * 0.85); e.consume(); }
+                case HOME     -> { logArea.setScrollTop(0); logStickToBottom = false; e.consume(); }
+                case END      -> { logArea.setScrollTop(Double.MAX_VALUE); logStickToBottom = true; e.consume(); }
+                default -> {}
+            }
+        });
+
+        // Ctrl + mouse wheel zooms
+        logArea.addEventFilter(javafx.scene.input.ScrollEvent.SCROLL, e -> {
+            if (e.isControlDown()) {
+                changeLogZoom(e.getDeltaY() > 0 ? +1 : -1);
                 e.consume();
             }
         });
@@ -506,35 +553,58 @@ public class MainController implements TransferListener {
         return view;
     }
 
+    private void scrollLog(double delta) {
+        logArea.setScrollTop(Math.max(0, logArea.getScrollTop() + delta));
+        logStickToBottom = false;
+    }
+
+    private void changeLogZoom(int step) {
+        logFontSize = Math.max(9, Math.min(28, logFontSize + step));
+        applyLogFont();
+    }
+
+    private void applyLogFont() {
+        logArea.setStyle("-fx-font-size: " + logFontSize + "px;");
+    }
+
     private void applySearch(String query) {
+        String text;
         if (query == null || query.isBlank()) {
-            logArea.setText(logFullText);
-            logArea.setScrollTop(Double.MAX_VALUE);
-            return;
-        }
-        String lower = query.toLowerCase();
-        String[] lines = logFullText.split("\n");
-        StringBuilder sb = new StringBuilder();
-        // Show blocks: a block starts at "──" separator lines
-        // Include the whole block if any line matches
-        List<String> block = new ArrayList<>();
-        for (String line : lines) {
-            if (line.contains("──") && !block.isEmpty()) {
-                String blockText = String.join("\n", block);
-                if (blockText.toLowerCase().contains(lower)) {
-                    sb.append(blockText).append("\n");
+            text = logFullText;
+        } else {
+            String lower = query.toLowerCase();
+            StringBuilder sb = new StringBuilder();
+            List<String> block = new ArrayList<>();
+            for (String line : logFullText.split("\n", -1)) {
+                if (line.startsWith("── ") && !block.isEmpty()) {
+                    String b = String.join("\n", block);
+                    if (b.toLowerCase().contains(lower)) sb.append(b).append("\n");
+                    block.clear();
                 }
-                block.clear();
+                block.add(line);
             }
-            block.add(line);
+            if (!block.isEmpty()) {
+                String b = String.join("\n", block);
+                if (b.toLowerCase().contains(lower)) sb.append(b).append("\n");
+            }
+            text = sb.length() > 0 ? sb.toString() : "(no results for \"" + query + "\")";
         }
-        // Last block
-        if (!block.isEmpty()) {
-            String blockText = String.join("\n", block);
-            if (blockText.toLowerCase().contains(lower)) sb.append(blockText).append("\n");
+        setLogText(text, query == null || query.isBlank());
+    }
+
+    // Only touches the TextArea when the content actually changed, and preserves
+    // the user's scroll position unless they were already at the bottom.
+    private void setLogText(String text, boolean allowFollow) {
+        if (text.equals(logShownText)) return;
+        double prevScroll = logArea.getScrollTop();
+        boolean follow = allowFollow && logStickToBottom;
+        logShownText = text;
+        logArea.setText(text);
+        if (follow) {
+            logArea.setScrollTop(Double.MAX_VALUE);
+        } else {
+            logArea.setScrollTop(prevScroll);
         }
-        logArea.setText(sb.length() > 0 ? sb.toString() : "(no results for \"" + query + "\")");
-        logArea.setScrollTop(0);
     }
 
     private void refreshLog() {
@@ -545,8 +615,7 @@ public class MainController implements TransferListener {
         } catch (IOException e) {
             logFullText = "Error reading log file.";
         }
-        String query = logSearchField != null ? logSearchField.getText() : "";
-        applySearch(query);
+        applySearch(logSearchField != null ? logSearchField.getText() : "");
     }
 
     // ── Utilities ─────────────────────────────────────────────────────────────
