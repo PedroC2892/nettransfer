@@ -55,7 +55,7 @@ public class TransferRequestDialog {
         // Header
         VBox header = new VBox(4);
         header.getStyleClass().add("dialog-header");
-        Label title = new Label("Pedido de transferência");
+        Label title = new Label("Incoming transfer");
         title.getStyleClass().add("dialog-title");
         Label sender = new Label(senderName + "  ·  " + senderIp);
         sender.getStyleClass().add("dialog-sender");
@@ -88,13 +88,13 @@ public class TransferRequestDialog {
             name.getStyleClass().add("file-entry-name");
             HBox sp = new HBox();
             HBox.setHgrow(sp, Priority.ALWAYS);
-            Label size = new Label(entry.isDirectory ? "pasta" : MainController.formatSize(entry.size));
+            Label size = new Label(entry.isDirectory ? "folder" : MainController.formatSize(entry.size));
             size.getStyleClass().add("file-entry-size");
             row.getChildren().addAll(ico, name, sp, size);
             fileList.getChildren().add(row);
         }
         if (files.size() > 8) {
-            Label more = new Label("+ mais " + (files.size() - 8) + " ficheiro(s)");
+            Label more = new Label("+ " + (files.size() - 8) + " more file(s)");
             more.setStyle("-fx-text-fill:#444444; -fx-font-size:12px; -fx-padding: 4 0 0 0;");
             fileList.getChildren().add(more);
         }
@@ -109,7 +109,7 @@ public class TransferRequestDialog {
         VBox summary = new VBox(2);
         summary.getStyleClass().add("summary-box");
         VBox.setMargin(summary, new Insets(0, 22, 0, 22));
-        Label summaryLabel = new Label(totalFiles + " ficheiro(s)  ·  " + MainController.formatSize(totalSize));
+        Label summaryLabel = new Label(totalFiles + " file(s)  ·  " + MainController.formatSize(totalSize));
         summaryLabel.getStyleClass().add("summary-text");
         summary.getChildren().add(summaryLabel);
 
@@ -121,7 +121,7 @@ public class TransferRequestDialog {
         VBox.setMargin(spaceWarning, new Insets(8, 22, 0, 22));
 
         // Buttons — Enter accepts, Esc rejects
-        Button acceptBtn = new Button("Aceitar  [Enter]");
+        Button acceptBtn = new Button("Accept  [Enter]");
         acceptBtn.getStyleClass().add("btn-primary");
         acceptBtn.setPrefWidth(130);
         acceptBtn.setDefaultButton(true);

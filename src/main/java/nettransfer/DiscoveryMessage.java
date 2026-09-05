@@ -1,9 +1,8 @@
 package nettransfer;
 
 public class DiscoveryMessage {
-    // Classe que da o formato a mensagem 
-    // de discoberta
-    public String type;      // "DISCOVER" ou "RESPONSE"
+    // UDP discovery message payload.
+    public String type;      // "DISCOVER" or "RESPONSE"
     public String id;
     public String userName;
     public String hostName;

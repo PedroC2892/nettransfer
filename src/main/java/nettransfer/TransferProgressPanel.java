@@ -49,14 +49,14 @@ public class TransferProgressPanel {
         Label timeLabel = new Label(LocalDateTime.now().format(TIME_FMT));
         timeLabel.setStyle("-fx-font-size:11px; -fx-text-fill:#4a5568;");
 
-        statusLabel = new Label("A aguardar");
+        statusLabel = new Label("Waiting");
         statusLabel.getStyleClass().addAll("transfer-status");
 
-        detailsBtn = new Button("▸ detalhes");
+        detailsBtn = new Button("▸ details");
         detailsBtn.setStyle("-fx-background-color:transparent; -fx-font-size:11px; -fx-text-fill:#4a5568; -fx-cursor:hand; -fx-padding:0 4 0 4;");
         detailsBtn.setOnAction(e -> toggleDetails());
 
-        openBtn = new Button("📂 Abrir");
+        openBtn = new Button("📂 Open");
         openBtn.getStyleClass().add("btn-secondary");
         openBtn.setStyle("-fx-font-size:11px; -fx-padding: 3 10 3 10;");
         openBtn.setVisible(false);
@@ -93,14 +93,14 @@ public class TransferProgressPanel {
         // Header info
         VBox infoBlock = new VBox(3);
         addDetailRow(infoBlock, "IP", peerIp != null ? peerIp : "—");
-        addDetailRow(infoBlock, "Direção", direction);
+        addDetailRow(infoBlock, "Direction", direction);
         addDetailRow(infoBlock, "Total", MainController.formatSize(totalSize));
-        if (files != null) addDetailRow(infoBlock, "Ficheiros", files.size() + "");
+        if (files != null) addDetailRow(infoBlock, "Files", files.size() + "");
         detailsBox.getChildren().add(infoBlock);
 
         // File list
         if (files != null && !files.isEmpty()) {
-            Label filesHdr = new Label("Ficheiros:");
+            Label filesHdr = new Label("Files:");
             filesHdr.setStyle("-fx-font-size:11px; -fx-text-fill:#4a5568; -fx-padding: 6 0 2 0;");
             detailsBox.getChildren().add(filesHdr);
             for (TransferMessage.FileEntry f : files) {
@@ -112,7 +112,7 @@ public class TransferProgressPanel {
                 Label fname = new Label(f.relativePath);
                 fname.setStyle("-fx-font-size:12px; -fx-text-fill:#8a9bb5;");
                 HBox sp2 = new HBox(); HBox.setHgrow(sp2, Priority.ALWAYS);
-                Label fsize = new Label(f.isDirectory ? "pasta" : MainController.formatSize(f.size));
+                Label fsize = new Label(f.isDirectory ? "folder" : MainController.formatSize(f.size));
                 fsize.setStyle("-fx-font-size:11px; -fx-text-fill:#4a5568;");
                 row.getChildren().addAll(icon, fname, sp2, fsize);
                 detailsBox.getChildren().add(row);
@@ -136,7 +136,7 @@ public class TransferProgressPanel {
         detailsVisible = !detailsVisible;
         detailsBox.setVisible(detailsVisible);
         detailsBox.setManaged(detailsVisible);
-        detailsBtn.setText(detailsVisible ? "▾ detalhes" : "▸ detalhes");
+        detailsBtn.setText(detailsVisible ? "▾ details" : "▸ details");
     }
 
     public Node node() { return box; }
@@ -151,10 +151,10 @@ public class TransferProgressPanel {
         VBox infoBlock = new VBox(3);
         addDetailRow(infoBlock, "IP", peerIp != null ? peerIp : "—");
         addDetailRow(infoBlock, "Total", MainController.formatSize(totalSize));
-        if (files != null) addDetailRow(infoBlock, "Ficheiros", files.size() + "");
+        if (files != null) addDetailRow(infoBlock, "Files", files.size() + "");
         detailsBox.getChildren().add(infoBlock);
         if (files != null && !files.isEmpty()) {
-            Label filesHdr = new Label("Ficheiros:");
+            Label filesHdr = new Label("Files:");
             filesHdr.setStyle("-fx-font-size:11px; -fx-text-fill:#4a5568; -fx-padding: 6 0 2 0;");
             detailsBox.getChildren().add(filesHdr);
             for (TransferMessage.FileEntry f : files) {
@@ -165,7 +165,7 @@ public class TransferProgressPanel {
                 Label fname = new Label(f.relativePath);
                 fname.setStyle("-fx-font-size:12px; -fx-text-fill:#8a9bb5;");
                 HBox sp2 = new HBox(); HBox.setHgrow(sp2, Priority.ALWAYS);
-                Label fsize = new Label(f.isDirectory ? "pasta" : MainController.formatSize(f.size));
+                Label fsize = new Label(f.isDirectory ? "folder" : MainController.formatSize(f.size));
                 fsize.setStyle("-fx-font-size:11px; -fx-text-fill:#4a5568;");
                 row.getChildren().addAll(icon, fname, sp2, fsize);
                 detailsBox.getChildren().add(row);

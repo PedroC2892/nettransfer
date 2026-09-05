@@ -521,7 +521,7 @@ public class MainController implements TransferListener {
             return;
         }
 
-        // Overlay activo — só fechar (e só quando visível na aba de dispositivos)
+        // Overlay active — only allow close (and only when visible on the devices tab)
         if (overlayView.isVisible()) {
             switch (e.getCode()) {
                 case ESCAPE -> {
@@ -544,7 +544,7 @@ public class MainController implements TransferListener {
             return;
         }
 
-        // Na aba de registos não interceptar nada (deixar a TextArea e o campo de pesquisa gerir tudo)
+        // On the logs tab, do not intercept anything (let TextArea and search field handle all keys)
         if (activeTab == 1) return;
 
         if (activeTab == 2) {
@@ -1100,7 +1100,7 @@ public class MainController implements TransferListener {
                 case TRANSFERRING -> "Transferring...";
                 case DONE -> "✓  Done";
                 case REJECTED -> "—  Rejected";
-                case ERROR -> "✗  Erro";
+                case ERROR -> "✗  Error";
             };
             statusLabel.setText(text);
             if (s == TransferStatus.DONE) {

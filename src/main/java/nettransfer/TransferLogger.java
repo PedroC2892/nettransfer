@@ -22,7 +22,7 @@ public class TransferLogger {
         StringBuilder sb = new StringBuilder();
         sb.append(header("SEND", transferId));
         sb.append(row("To", peerName + " (" + peerIp + ")"));
-        sb.append(row("Total", formatSize(totalSize) + "  ·  " + files.size() + " ficheiro(s)"));
+        sb.append(row("Total", formatSize(totalSize) + "  ·  " + files.size() + " file(s)"));
         for (TransferMessage.FileEntry f : files) {
             String tag = f.isDirectory ? "  [dir]  " : "  [file] ";
             sb.append(row(tag + f.relativePath, f.isDirectory ? "" : formatSize(f.size)));
@@ -55,7 +55,7 @@ public class TransferLogger {
         StringBuilder sb = new StringBuilder();
         sb.append(header("INCOMING REQUEST", transferId));
         sb.append(row("From", senderName + " (" + senderIp + ")"));
-        sb.append(row("Total", formatSize(totalSize) + "  ·  " + files.size() + " ficheiro(s)"));
+        sb.append(row("Total", formatSize(totalSize) + "  ·  " + files.size() + " file(s)"));
         for (TransferMessage.FileEntry f : files) {
             String tag = f.isDirectory ? "  [dir]  " : "  [file] ";
             sb.append(row(tag + f.relativePath, f.isDirectory ? "" : formatSize(f.size)));
