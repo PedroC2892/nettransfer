@@ -16,7 +16,16 @@ sudo pacman -S jdk17-openjdk maven
 sudo apt install openjdk-17-jdk maven
 ```
 
+On Windows, install both with [winget](https://learn.microsoft.com/windows/package-manager/winget/):
+
+```
+winget install EclipseAdoptium.Temurin.17.JDK
+winget install Apache.Maven
+```
+
 ## Build and run
+
+### Linux
 
 ```
 git clone https://github.com/PedroC2892/nettransfer.git
@@ -26,6 +35,17 @@ mvn package -DskipTests
 ```
 
 Always use `run.sh` to launch — running the jar directly with `java -jar` will fail.
+
+### Windows
+
+```
+git clone https://github.com/PedroC2892/nettransfer.git
+cd nettransfer
+mvn javafx:run
+```
+
+The first run needs Maven to fetch the Windows JavaFX natives, so use `mvn javafx:run` once —
+after that, `mvn package -DskipTests` followed by `run.bat` works the same way `run.sh` does on Linux.
 
 ## Install as a desktop app
 
@@ -58,7 +78,8 @@ update-desktop-database ~/.local/share/applications/
 | `Ctrl+1/2/3` | Switch tabs |
 | Arrows | Navigate devices |
 
-Received files go to `~/Downloads/NetTransfer/<timestamp>/`.
+`Ctrl` is `Cmd` on macOS. Received files go to `~/Downloads/NetTransfer/<timestamp>/`
+(`%USERPROFILE%\Downloads\NetTransfer\<timestamp>\` on Windows).
 
 ## License
 
