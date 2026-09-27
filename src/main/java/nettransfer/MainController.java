@@ -118,6 +118,9 @@ public class MainController implements TransferListener {
         Label title = new Label("NetTransfer");
         title.getStyleClass().add("app-title");
 
+        Label version = new Label("v" + App.VERSION);
+        version.getStyleClass().add("app-version");
+
         HBox spacer = new HBox(); HBox.setHgrow(spacer, Priority.ALWAYS);
 
         navDevices = new Button("Devices  [Ctrl+1]");
@@ -132,7 +135,7 @@ public class MainController implements TransferListener {
         navSettings.getStyleClass().add("nav-tab");
         navSettings.setOnAction(e -> switchTab(2));
 
-        HBox bar = new HBox(0, title, spacer, navDevices, navLogs, navSettings);
+        HBox bar = new HBox(0, title, version, spacer, navDevices, navLogs, navSettings);
         bar.getStyleClass().add("top-bar");
         bar.setAlignment(Pos.CENTER_LEFT);
         return bar;

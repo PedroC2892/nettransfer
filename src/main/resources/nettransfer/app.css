@@ -21,6 +21,12 @@
     -fx-text-fill: #f0f0f0;
 }
 
+.app-version {
+    -fx-font-size: 11px;
+    -fx-text-fill: #777777;
+    -fx-padding: 3 0 0 6;
+}
+
 /* ── Nav tabs ── */
 .nav-tab {
     -fx-background-color: transparent;

@@ -3,6 +3,10 @@ package nettransfer;
 import com.google.gson.Gson;
 import com.google.gson.JsonSyntaxException;
 
+import javax.crypto.AEADBadTagException;
+import javax.crypto.Cipher;
+import javax.crypto.spec.GCMParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
@@ -10,6 +14,9 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
+import java.security.MessageDigest;
+import java.security.SecureRandom;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.HashMap;
@@ -20,20 +27,67 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
 
+/**
+ * Discovery packets carry the username and hostname of every peer on the LAN.
+ * Sent as plain UDP broadcast, they would be readable by anyone sniffing the
+ * network, so each packet is encrypted with AES-256-GCM under a static,
+ * app-wide pre-shared key: [12-byte random IV][ciphertext + 16-byte tag].
+ * This is not peer-authenticated (no per-connection handshake is possible for
+ * a one-to-many broadcast) — it only shields the payload from passive sniffing
+ * by anyone who doesn't have the app.
+ */
 public class DiscoveryService {
     public static final int DISCOVERY_PORT = 54321;
     public static final long BROADCAST_INTERVAL_MS = 5000;
 
     private static final long RATE_WINDOW_MS = 10_000;
     private static final int RATE_MAX_PACKETS = 10;
+    private static final int GCM_IV_LENGTH = 12;
+    private static final int GCM_TAG_BITS = 128;
+
+    private static final SecretKeySpec DISCOVERY_KEY = deriveDiscoveryKey();
 
     private final Gson gson = new Gson();
     private final String myId = UUID.randomUUID().toString();
-    private final byte[] data;
+    private final SecureRandom random = new SecureRandom();
+    private final byte[] plaintext;
 
     public DiscoveryService(int tcpPort) {
         DiscoveryMessage msg = new DiscoveryMessage("DISCOVER", myId, getUserName(), getHostname(), tcpPort);
-        data = gson.toJson(msg).getBytes(StandardCharsets.UTF_8);
+        plaintext = gson.toJson(msg).getBytes(StandardCharsets.UTF_8);
+    }
+
+    private static SecretKeySpec deriveDiscoveryKey() {
+        try {
+            byte[] keyBytes = MessageDigest.getInstance("SHA-256")
+                    .digest("NetTransfer UDP discovery v1".getBytes(StandardCharsets.UTF_8));
+            return new SecretKeySpec(keyBytes, "AES");
+        } catch (GeneralSecurityException e) {
+            throw new IllegalStateException("SHA-256 unavailable", e);
+        }
+    }
+
+    private byte[] encryptPacket(byte[] plain) throws GeneralSecurityException {
+        byte[] iv = new byte[GCM_IV_LENGTH];
+        random.nextBytes(iv);
+        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+        cipher.init(Cipher.ENCRYPT_MODE, DISCOVERY_KEY, new GCMParameterSpec(GCM_TAG_BITS, iv));
+        byte[] ciphertext = cipher.doFinal(plain);
+        byte[] packet = new byte[GCM_IV_LENGTH + ciphertext.length];
+        System.arraycopy(iv, 0, packet, 0, GCM_IV_LENGTH);
+        System.arraycopy(ciphertext, 0, packet, GCM_IV_LENGTH, ciphertext.length);
+        return packet;
+    }
+
+    private static byte[] decryptPacket(byte[] packet, int length) throws GeneralSecurityException {
+        if (length <= GCM_IV_LENGTH) {
+            throw new AEADBadTagException("Packet too short");
+        }
+        byte[] iv = new byte[GCM_IV_LENGTH];
+        System.arraycopy(packet, 0, iv, 0, GCM_IV_LENGTH);
+        Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
+        cipher.init(Cipher.DECRYPT_MODE, DISCOVERY_KEY, new GCMParameterSpec(GCM_TAG_BITS, iv));
+        return cipher.doFinal(packet, GCM_IV_LENGTH, length - GCM_IV_LENGTH);
     }
 
     private static String getHostname() {
@@ -71,9 +125,12 @@ public class DiscoveryService {
                         new InetSocketAddress(InetAddress.getByName(info.ipAddress), 0))) {
                     socket.setBroadcast(true);
                     InetAddress bcast = InetAddress.getByName(info.broadcastAddress);
-                    socket.send(new DatagramPacket(data, data.length, bcast, port));
+                    byte[] packet = encryptPacket(plaintext);
+                    socket.send(new DatagramPacket(packet, packet.length, bcast, port));
                 } catch (IOException e) {
                     // interface may have changed state between enumeration and send — skip it this cycle
+                } catch (GeneralSecurityException e) {
+                    TransferLogger.logSecurityEvent("Failed to encrypt discovery packet: " + e.getMessage(), info.ipAddress);
                 }
             }
 
@@ -97,7 +154,14 @@ public class DiscoveryService {
                 String ip = receivedPacket.getAddress().getHostAddress();
                 if (isRateLimited(recentPackets, ip)) continue;
 
-                String json = new String(receivedPacket.getData(), 0, receivedPacket.getLength(), StandardCharsets.UTF_8);
+                byte[] plain;
+                try {
+                    plain = decryptPacket(receivedPacket.getData(), receivedPacket.getLength());
+                } catch (GeneralSecurityException e) {
+                    continue;
+                }
+
+                String json = new String(plain, StandardCharsets.UTF_8);
                 DiscoveryMessage received;
                 try {
                     received = gson.fromJson(json, DiscoveryMessage.class);
