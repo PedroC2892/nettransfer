@@ -22,8 +22,10 @@ import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -179,6 +181,11 @@ public class FileTransferService {
 
             listener.onStatusChange(request.transferId, TransferStatus.TRANSFERRING);
 
+            Map<String, TransferMessage.FileEntry> pendingEntries = new HashMap<>();
+            if (request.files != null) {
+                for (TransferMessage.FileEntry fe : request.files) pendingEntries.put(fe.relativePath, fe);
+            }
+
             String timestamp = LocalDateTime.now().format(FOLDER_FMT);
             destBase = DOWNLOAD_BASE.resolve(timestamp).toAbsolutePath().normalize();
             Files.createDirectories(destBase);
@@ -200,6 +207,14 @@ public class FileTransferService {
                     break;
                 }
                 if (!"FILE_START".equals(msg.type)) continue;
+
+                TransferMessage.FileEntry approved = pendingEntries.remove(msg.relativePath);
+                if (approved == null || approved.isDirectory != msg.isDirectory
+                        || (!msg.isDirectory && approved.size != msg.size)) {
+                    TransferLogger.logSecurityEvent(
+                            "Receiver aborted: file not in accepted transfer manifest: " + msg.relativePath, senderIp);
+                    throw new IOException("File not present in accepted transfer: " + msg.relativePath);
+                }
 
                 Path target = resolveSafePath(destBase, msg.relativePath);
                 if (msg.isDirectory) {
