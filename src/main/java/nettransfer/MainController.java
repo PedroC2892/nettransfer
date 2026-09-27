@@ -896,8 +896,13 @@ public class MainController implements TransferListener {
 
     static void openPath(String path) {
         new Thread(() -> {
-            try { new ProcessBuilder("xdg-open", path).start(); }
-            catch (Exception e) { try { Desktop.getDesktop().open(new File(path)); } catch (Exception ignored) {} }
+            String os = System.getProperty("os.name", "").toLowerCase();
+            try {
+                if (os.contains("linux")) new ProcessBuilder("xdg-open", path).start();
+                else Desktop.getDesktop().open(new File(path));
+            } catch (Exception e) {
+                try { Desktop.getDesktop().open(new File(path)); } catch (Exception ignored) {}
+            }
         }).start();
     }
 
