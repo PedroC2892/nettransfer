@@ -506,19 +506,19 @@ public class MainController implements TransferListener {
     // ── Keyboard ─────────────────────────────────────────────────────────────
 
     private void handleKey(KeyEvent e) {
-        if (e.isControlDown() && e.getCode() == KeyCode.DIGIT1) { switchTab(0); e.consume(); return; }
-        if (e.isControlDown() && e.getCode() == KeyCode.DIGIT2) { switchTab(1); e.consume(); return; }
-        if (e.isControlDown() && e.getCode() == KeyCode.DIGIT3) { switchTab(2); e.consume(); return; }
+        if (e.isShortcutDown() && e.getCode() == KeyCode.DIGIT1) { switchTab(0); e.consume(); return; }
+        if (e.isShortcutDown() && e.getCode() == KeyCode.DIGIT2) { switchTab(1); e.consume(); return; }
+        if (e.isShortcutDown() && e.getCode() == KeyCode.DIGIT3) { switchTab(2); e.consume(); return; }
 
         // Works on every tab, even while the overlay is up
-        if (e.isControlDown() && e.getCode() == KeyCode.D) {
+        if (e.isShortcutDown() && e.getCode() == KeyCode.D) {
             openFolder(FileTransferService.DOWNLOAD_BASE.toString());
             e.consume();
             return;
         }
 
         // Open the log file itself — only meaningful on the logs tab
-        if (e.isControlDown() && e.getCode() == KeyCode.L && activeTab == 1) {
+        if (e.isShortcutDown() && e.getCode() == KeyCode.L && activeTab == 1) {
             openPath(TransferLogger.LOG_FILE.toString());
             e.consume();
             return;
@@ -531,7 +531,7 @@ public class MainController implements TransferListener {
                     if (!overlayDismissBtn.isDisabled()) { dismissOverlay(); e.consume(); }
                 }
                 case S -> {
-                    if (e.isControlDown() && !overlayDismissBtn.isDisabled()) { dismissOverlay(); e.consume(); }
+                    if (e.isShortcutDown() && !overlayDismissBtn.isDisabled()) { dismissOverlay(); e.consume(); }
                 }
                 case O -> {
                     // Open the receive folder of the first finished transfer that has one
@@ -561,8 +561,8 @@ public class MainController implements TransferListener {
                     }
                 }
                 case A -> {
-                    if (e.isControlDown() && e.isShiftDown()) { setAllIfaces(false); e.consume(); }
-                    else if (e.isControlDown()) { setAllIfaces(true); e.consume(); }
+                    if (e.isShortcutDown() && e.isShiftDown()) { setAllIfaces(false); e.consume(); }
+                    else if (e.isShortcutDown()) { setAllIfaces(true); e.consume(); }
                 }
                 default -> {}
             }
@@ -572,7 +572,7 @@ public class MainController implements TransferListener {
         switch (e.getCode()) {
             case F -> { chooseFiles(); e.consume(); }
             case S -> {
-                if (e.isControlDown() && !sendButton.isDisabled()) { sendToSelected(); e.consume(); }
+                if (e.isShortcutDown() && !sendButton.isDisabled()) { sendToSelected(); e.consume(); }
             }
             case ESCAPE -> { selectedFiles.clear(); filesLabel.setText("No files selected"); updateSendButton(); e.consume(); }
             case LEFT, UP   -> { navigateCards(-1, e.isShiftDown()); e.consume(); }
@@ -585,7 +585,7 @@ public class MainController implements TransferListener {
                     e.consume();
                 }
             }
-            case A -> { if (e.isControlDown()) { selectAll(); e.consume(); } }
+            case A -> { if (e.isShortcutDown()) { selectAll(); e.consume(); } }
             default -> {}
         }
     }
@@ -768,10 +768,10 @@ public class MainController implements TransferListener {
         });
 
         logSearchField.setOnKeyPressed(e -> {
-            if (e.isControlDown() && e.getCode() == KeyCode.L) {
+            if (e.isShortcutDown() && e.getCode() == KeyCode.L) {
                 openPath(TransferLogger.LOG_FILE.toString());
                 e.consume();
-            } else if (e.isControlDown() && e.getCode() == KeyCode.D) {
+            } else if (e.isShortcutDown() && e.getCode() == KeyCode.D) {
                 openFolder(FileTransferService.DOWNLOAD_BASE.toString());
                 e.consume();
             } else if (e.getCode() == KeyCode.ESCAPE) {
@@ -786,7 +786,7 @@ public class MainController implements TransferListener {
 
         // Arrows / PageUp / PageDown / Home / End scroll the log; Ctrl+/- zooms.
         logArea.addEventFilter(KeyEvent.KEY_PRESSED, e -> {
-            if (e.isControlDown()) {
+            if (e.isShortcutDown()) {
                 switch (e.getCode()) {
                     case F -> { logSearchField.requestFocus(); logSearchField.selectAll(); e.consume(); }
                     case PLUS, EQUALS, ADD -> { changeLogZoom(+1); e.consume(); }
@@ -811,7 +811,7 @@ public class MainController implements TransferListener {
 
         // Ctrl + mouse wheel zooms
         logArea.addEventFilter(javafx.scene.input.ScrollEvent.SCROLL, e -> {
-            if (e.isControlDown()) {
+            if (e.isShortcutDown()) {
                 changeLogZoom(e.getDeltaY() > 0 ? +1 : -1);
                 e.consume();
             }
