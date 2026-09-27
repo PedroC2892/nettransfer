@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.LinkedHashSet;
 import java.util.Set;
+import java.util.UUID;
 
 public class AppSettings {
     private static final Path FILE = Paths.get(System.getProperty("user.home"), ".config", "nettransfer", "settings.json");
@@ -16,6 +17,16 @@ public class AppSettings {
 
     public Set<String> enabledInterfaces = new LinkedHashSet<>();
     public boolean autoSelectAll = true;
+    public String deviceId;
+
+    /** Stable identity for discovery, persisted so restarting the app doesn't look like a new device to peers. */
+    public String getOrCreateDeviceId() {
+        if (deviceId == null || deviceId.isEmpty()) {
+            deviceId = UUID.randomUUID().toString();
+            save();
+        }
+        return deviceId;
+    }
 
     public static AppSettings load() {
         try {

@@ -21,7 +21,7 @@ public class App extends Application {
 
         Thread receiverThread = new Thread(() -> {
             try {
-                discoveryService.broadcastReceiver(DiscoveryService.DISCOVERY_PORT, controller::onPeerDiscovered);
+                discoveryService.broadcastReceiver(DiscoveryService.DISCOVERY_PORT, controller::onPeerDiscovered, controller::onPeerGone);
             } catch (Exception e) {
                 e.printStackTrace();
             }
@@ -38,6 +38,9 @@ public class App extends Application {
         });
         broadcastThread.setDaemon(true);
         broadcastThread.start();
+
+        Runtime.getRuntime().addShutdownHook(new Thread(() ->
+                discoveryService.announceGoodbye(DiscoveryService.DISCOVERY_PORT)));
 
         controller.show();
     }

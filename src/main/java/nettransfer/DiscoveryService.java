@@ -24,7 +24,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.UUID;
 import java.util.function.Consumer;
 
 /**
@@ -48,13 +47,16 @@ public class DiscoveryService {
     private static final SecretKeySpec DISCOVERY_KEY = deriveDiscoveryKey();
 
     private final Gson gson = new Gson();
-    private final String myId = UUID.randomUUID().toString();
+    private final String myId = AppSettings.load().getOrCreateDeviceId();
     private final SecureRandom random = new SecureRandom();
     private final byte[] plaintext;
+    private final byte[] goodbyePlaintext;
 
     public DiscoveryService(int tcpPort) {
         DiscoveryMessage msg = new DiscoveryMessage("DISCOVER", myId, getUserName(), getHostname(), tcpPort);
         plaintext = gson.toJson(msg).getBytes(StandardCharsets.UTF_8);
+        DiscoveryMessage bye = new DiscoveryMessage("GOODBYE", myId, getUserName(), getHostname(), tcpPort);
+        goodbyePlaintext = gson.toJson(bye).getBytes(StandardCharsets.UTF_8);
     }
 
     private static SecretKeySpec deriveDiscoveryKey() {
@@ -143,7 +145,23 @@ public class DiscoveryService {
         }
     }
 
-    public void broadcastReceiver(int port, Consumer<Peer> onPeerDiscovered) throws IOException {
+    /** Best-effort single-shot broadcast telling peers this device is going offline now, instead of making them wait for the stale timeout. */
+    public void announceGoodbye(int port) {
+        for (NetworkInterfaceInfo info : NetworkInterfaceInfo.enumerate()) {
+            if (!info.supportsBroadcast) continue;
+            try (DatagramSocket socket = new DatagramSocket(
+                    new InetSocketAddress(InetAddress.getByName(info.ipAddress), 0))) {
+                socket.setBroadcast(true);
+                InetAddress bcast = InetAddress.getByName(info.broadcastAddress);
+                byte[] packet = encryptPacket(goodbyePlaintext);
+                socket.send(new DatagramPacket(packet, packet.length, bcast, port));
+            } catch (Exception ignored) {
+                // best-effort: the stale timeout is the fallback if this doesn't get through
+            }
+        }
+    }
+
+    public void broadcastReceiver(int port, Consumer<Peer> onPeerDiscovered, Consumer<String> onPeerGone) throws IOException {
         Map<String, Deque<Long>> recentPackets = new HashMap<>();
         try (DatagramSocket socket = new DatagramSocket(port)) {
             byte[] buffer = new byte[1024];
@@ -169,6 +187,11 @@ public class DiscoveryService {
                     continue;
                 }
                 if (!isValid(received) || received.id.equals(myId)) {
+                    continue;
+                }
+
+                if ("GOODBYE".equals(received.type)) {
+                    onPeerGone.accept(received.id);
                     continue;
                 }
 

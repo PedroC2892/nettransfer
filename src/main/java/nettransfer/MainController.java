@@ -688,12 +688,27 @@ public class MainController implements TransferListener {
         long now = System.currentTimeMillis();
         List<String> stale = new ArrayList<>();
         lastSeen.forEach((id, ts) -> { if (now - ts > PEER_TIMEOUT_MS) stale.add(id); });
-        for (String id : stale) {
-            Peer lost = peers.remove(id); lastSeen.remove(id); selectedPeerIds.remove(id);
-            DeviceCard card = cards.remove(id);
-            if (card != null) cardsPane.getChildren().remove(card.node());
-            if (lost != null) TransferLogger.logPeerLost(lost.name, lost.ipAddress);
-        }
+        if (stale.isEmpty()) return;
+        for (String id : stale) removePeerCard(id);
+        refreshEmptyState();
+    }
+
+    /** Called when a peer announces it's going offline, so it disappears immediately instead of waiting for the stale timeout. */
+    public void onPeerGone(String peerId) {
+        Platform.runLater(() -> {
+            removePeerCard(peerId);
+            refreshEmptyState();
+        });
+    }
+
+    private void removePeerCard(String id) {
+        Peer lost = peers.remove(id); lastSeen.remove(id); selectedPeerIds.remove(id);
+        DeviceCard card = cards.remove(id);
+        if (card != null) cardsPane.getChildren().remove(card.node());
+        if (lost != null) TransferLogger.logPeerLost(lost.name, lost.ipAddress);
+    }
+
+    private void refreshEmptyState() {
         boolean empty = cards.isEmpty();
         cardsPane.setVisible(!empty); emptyLabel.setVisible(empty);
         if (empty) focusedCardIndex = -1; else focusedCardIndex = Math.min(focusedCardIndex, cards.size()-1);
