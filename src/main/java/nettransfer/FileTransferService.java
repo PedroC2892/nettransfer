@@ -121,8 +121,12 @@ public class FileTransferService {
                     TransferMessage.fileStart(transferId, entry.relativePath, entry.size, false).writeTo(out, gson);
                     MessageDigest digest = newSha256();
                     try (FileInputStream fis = new FileInputStream(entry.file)) {
-                        int read;
-                        while ((read = fis.read(buffer)) != -1) {
+                        // send exactly the announced size: a file that grew or shrank would desync the stream
+                        long remaining = entry.size;
+                        while (remaining > 0) {
+                            int read = fis.read(buffer, 0, (int) Math.min(buffer.length, remaining));
+                            if (read == -1) throw new IOException("File shrank during transfer: " + entry.relativePath);
+                            remaining -= read;
                             out.write(buffer, 0, read);
                             digest.update(buffer, 0, read);
                             transferred += read;

@@ -60,4 +60,44 @@ class FileTransferServiceTest {
         assertEquals("keep me", Files.readString(existing));
         assertEquals("report_3.pdf", FileTransferService.createUnique(existing).getFileName().toString());
     }
+
+    /** Runs a send where the source file is modified while the receiver's user is deciding. */
+    private TransferStatus[] sendWhileModifying(Path src, Runnable modify) throws Exception {
+        TestSupport.RecordingListener receiver = new TestSupport.RecordingListener(true) {
+            @Override
+            public boolean onIncomingRequest(String transferId, String senderName, String senderIp,
+                                             List<TransferMessage.FileEntry> files, long totalSize, int totalFiles,
+                                             long usableSpace, boolean enoughSpace, String verificationCode) {
+                modify.run();
+                return true;
+            }
+        };
+        ServerSocket server = TestSupport.startReceiver(receiver);
+        TestSupport.RecordingListener sender = new TestSupport.RecordingListener(true);
+        FileTransferService.sendFiles(TestSupport.loopbackPeer(server), List.of(src.toFile()),
+                UUID.randomUUID().toString(), "tester", sender);
+        return new TransferStatus[]{sender.await(), receiver.await()};
+    }
+
+    @Test
+    void fileGrowingDuringTransferSendsAnnouncedSize() throws Exception {
+        Path src = Files.writeString(tmp.resolve("log.txt"), "12345");
+        TransferStatus[] result = sendWhileModifying(src, () -> {
+            try { Files.writeString(src, "67890", java.nio.file.StandardOpenOption.APPEND); }
+            catch (java.io.IOException e) { throw new RuntimeException(e); }
+        });
+        assertEquals(TransferStatus.DONE, result[0]);
+        assertEquals(TransferStatus.DONE, result[1]);
+    }
+
+    @Test
+    void fileShrinkingDuringTransferFailsCleanly() throws Exception {
+        Path src = Files.writeString(tmp.resolve("log.txt"), "1234567890");
+        TransferStatus[] result = sendWhileModifying(src, () -> {
+            try { Files.writeString(src, "1"); }
+            catch (java.io.IOException e) { throw new RuntimeException(e); }
+        });
+        assertEquals(TransferStatus.ERROR, result[0]);
+        assertEquals(TransferStatus.ERROR, result[1]);
+    }
 }
