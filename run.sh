@@ -13,13 +13,11 @@ $M2/javafx-base/$VER/javafx-base-$VER-linux.jar:\
 $M2/javafx-base/$VER/javafx-base-$VER.jar:\
 $M2/javafx-controls/$VER/javafx-controls-$VER-linux.jar:\
 $M2/javafx-controls/$VER/javafx-controls-$VER.jar:\
-$M2/javafx-fxml/$VER/javafx-fxml-$VER-linux.jar:\
-$M2/javafx-fxml/$VER/javafx-fxml-$VER.jar:\
 $M2/javafx-graphics/$VER/javafx-graphics-$VER-linux.jar:\
 $M2/javafx-graphics/$VER/javafx-graphics-$VER.jar"
 
 exec java \
   --module-path "$FX_MODS" \
-  --add-modules javafx.base,javafx.controls,javafx.fxml,javafx.graphics \
+  --add-modules javafx.base,javafx.controls,javafx.graphics \
   --enable-native-access=javafx.graphics \
   -jar "$JAR" "$@"
