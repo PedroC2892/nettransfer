@@ -211,13 +211,16 @@ public class FileTransferService {
             while (true) {
                 TransferMessage msg = TransferMessage.readFrom(in, gson);
                 if ("TRANSFER_COMPLETE".equals(msg.type)) {
+                    if (!pendingEntries.isEmpty()) {
+                        throw new IOException("Sender finished with " + pendingEntries.size() + " accepted entries missing");
+                    }
                     long elapsed = System.currentTimeMillis() - startTime;
                     TransferLogger.logReceiveDone(request.transferId, request.senderName,
                             request.totalSize, elapsed);
                     listener.onStatusChange(request.transferId, TransferStatus.DONE);
                     break;
                 }
-                if (!"FILE_START".equals(msg.type)) continue;
+                if (!"FILE_START".equals(msg.type)) throw new IOException("Unexpected message: " + msg.type);
 
                 TransferMessage.FileEntry approved = pendingEntries.remove(msg.relativePath);
                 if (approved == null || approved.isDirectory != msg.isDirectory
@@ -256,9 +259,13 @@ public class FileTransferService {
                         }
                     }
                 }
-                TransferMessage fileEnd = TransferMessage.readFrom(in, gson); // FILE_END
+                TransferMessage fileEnd = TransferMessage.readFrom(in, gson);
+                if (!"FILE_END".equals(fileEnd.type) || !msg.relativePath.equals(fileEnd.relativePath)) {
+                    throw new IOException("Expected FILE_END for " + msg.relativePath);
+                }
                 String actualHash = HexFormat.of().formatHex(digest.digest());
-                if (fileEnd.fileHash != null && !fileEnd.fileHash.equalsIgnoreCase(actualHash)) {
+                // the hash is mandatory: a sender that omits it must not skip verification
+                if (!actualHash.equalsIgnoreCase(fileEnd.fileHash)) {
                     Files.deleteIfExists(target);
                     TransferLogger.logIntegrityError(request.transferId, msg.relativePath, fileEnd.fileHash, actualHash);
                     throw new IOException("File integrity check failed: " + msg.relativePath);
