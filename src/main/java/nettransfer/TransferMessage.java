@@ -1,6 +1,7 @@
 package nettransfer;
 
 import com.google.gson.Gson;
+import com.google.gson.JsonParseException;
 
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
@@ -9,6 +10,9 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 public class TransferMessage {
+    /** Largest JSON frame accepted from the network (the manifest of a big folder is the largest message). */
+    static final int MAX_MESSAGE_BYTES = 8 * 1024 * 1024;
+
     public String type;
     public String transferId;
     public String senderName;
@@ -89,8 +93,16 @@ public class TransferMessage {
 
     public static TransferMessage readFrom(DataInputStream in, Gson gson) throws IOException {
         int len = in.readInt();
+        if (len <= 0 || len > MAX_MESSAGE_BYTES) throw new IOException("Invalid message length: " + len);
         byte[] data = new byte[len];
         in.readFully(data);
-        return gson.fromJson(new String(data, StandardCharsets.UTF_8), TransferMessage.class);
+        TransferMessage m;
+        try {
+            m = gson.fromJson(new String(data, StandardCharsets.UTF_8), TransferMessage.class);
+        } catch (JsonParseException e) {
+            throw new IOException("Malformed message", e);
+        }
+        if (m == null || m.type == null) throw new IOException("Message without type");
+        return m;
     }
 }
