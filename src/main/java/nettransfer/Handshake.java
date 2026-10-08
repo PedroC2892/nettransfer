@@ -6,6 +6,7 @@ import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.math.BigInteger;
@@ -39,6 +40,7 @@ public class Handshake {
     private static final String KEY_INFO = "NetTransfer v1 file transfer";
     private static final String VERIFY_INFO = "NetTransfer v1 verification";
     private static final String NONCE_INFO = "NetTransfer v1 nonce prefix";
+    private static final int MAX_PUBLIC_KEY_BYTES = 256;
 
     final SecretKey aesKey;
     private final String verificationCode;
@@ -92,13 +94,9 @@ public class Handshake {
             dos.writeInt(myPubBytes.length);
             dos.write(myPubBytes);
             dos.flush();
-            int len = dis.readInt();
-            theirPubBytes = new byte[len];
-            dis.readFully(theirPubBytes);
+            theirPubBytes = readPublicKey(dis);
         } else {
-            int len = dis.readInt();
-            theirPubBytes = new byte[len];
-            dis.readFully(theirPubBytes);
+            theirPubBytes = readPublicKey(dis);
             dos.writeInt(myPubBytes.length);
             dos.write(myPubBytes);
             dos.flush();
@@ -127,6 +125,15 @@ public class Handshake {
         byte[] recvPrefix = senderRole ? noncePrefixReceiverRole : noncePrefixSenderRole;
 
         return new Handshake(new SecretKeySpec(keyBytes, "AES"), code, sendPrefix, recvPrefix);
+    }
+
+    private static byte[] readPublicKey(DataInputStream dis) throws IOException {
+        int len = dis.readInt();
+        // X.509-encoded P-256 keys are 91 bytes; anything far off is garbage or an attack
+        if (len <= 0 || len > MAX_PUBLIC_KEY_BYTES) throw new IOException("Invalid public key length: " + len);
+        byte[] key = new byte[len];
+        dis.readFully(key);
+        return key;
     }
 
     private static byte[] sortedConcat(byte[] a, byte[] b) {
