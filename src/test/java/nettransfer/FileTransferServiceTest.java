@@ -51,4 +51,13 @@ class FileTransferServiceTest {
         assertEquals(TransferStatus.REJECTED, receiver.await());
         assertTrue(receiver.asked);
     }
+
+    @Test
+    void createUniqueNeverOverwrites() throws Exception {
+        Path existing = Files.writeString(tmp.resolve("report.pdf"), "keep me");
+        Path created = FileTransferService.createUnique(existing);
+        assertEquals("report_2.pdf", created.getFileName().toString());
+        assertEquals("keep me", Files.readString(existing));
+        assertEquals("report_3.pdf", FileTransferService.createUnique(existing).getFileName().toString());
+    }
 }

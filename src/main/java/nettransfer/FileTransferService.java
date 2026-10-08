@@ -9,12 +9,12 @@ import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.File;
 import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -233,11 +233,11 @@ public class FileTransferService {
                     continue;
                 }
                 Files.createDirectories(target.getParent());
-                target = uniquePath(target);
+                target = createUnique(target);
                 writtenFiles.add(target);
 
                 MessageDigest digest = newSha256();
-                try (FileOutputStream fos = new FileOutputStream(target.toFile())) {
+                try (OutputStream fos = Files.newOutputStream(target)) {
                     long remaining = msg.size;
                     while (remaining > 0) {
                         int toRead = (int) Math.min(buffer.length, remaining);
@@ -358,18 +358,21 @@ public class FileTransferService {
         return resolved;
     }
 
-    private static Path uniquePath(Path target) {
-        if (!Files.exists(target)) return target;
+    /** Atomically creates a new empty file at target, or at name_2.ext, name_3.ext... if taken. Never overwrites. */
+    static Path createUnique(Path target) throws IOException {
         String name = target.getFileName().toString();
         String base = name, ext = "";
         int dot = name.lastIndexOf('.');
         if (dot > 0) { base = name.substring(0, dot); ext = name.substring(dot); }
-        Path parent = target.getParent();
-        int i = 2;
-        Path candidate;
-        do { candidate = parent.resolve(base + "_" + i + ext); i++; }
-        while (Files.exists(candidate));
-        return candidate;
+        for (int i = 1; i <= 10_000; i++) {
+            Path candidate = i == 1 ? target : target.resolveSibling(base + "_" + i + ext);
+            try {
+                return Files.createFile(candidate);
+            } catch (FileAlreadyExistsException e) {
+                // taken (possibly by a concurrent transfer) — try the next suffix
+            }
+        }
+        throw new IOException("Too many files named " + name);
     }
 
     private static String baseName(String relativePath) {
