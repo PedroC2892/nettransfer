@@ -3,6 +3,10 @@ package nettransfer;
 import java.util.List;
 
 public interface TransferListener {
+    /**
+     * Called on the connection's network thread; blocks until the user answers.
+     * Implementations must return false after {@link FileTransferService#REQUEST_TIMEOUT_SECONDS}.
+     */
     boolean onIncomingRequest(String transferId, String senderName, String senderIp,
                               List<TransferMessage.FileEntry> files, long totalSize, int totalFiles,
                               long usableSpace, boolean enoughSpace, String verificationCode);

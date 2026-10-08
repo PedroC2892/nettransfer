@@ -26,15 +26,14 @@ import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CountDownLatch;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
-
-import javafx.application.Platform;
 
 public class FileTransferService {
     private static final long PROGRESS_INTERVAL_MS = 150;
     private static final long SPACE_SAFETY_MARGIN = 100L * 1024 * 1024;
+    /** How long the receiver's user has to accept or reject an incoming transfer. */
+    public static final int REQUEST_TIMEOUT_SECONDS = 60;
 
     static final Path DOWNLOAD_BASE = Paths.get(System.getProperty("user.home"), "Downloads", "NetTransfer");
     private static final DateTimeFormatter FOLDER_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss");
@@ -160,8 +159,6 @@ public class FileTransferService {
             DataOutputStream out = new DataOutputStream(new BufferedOutputStream(encOut));
 
             request = TransferMessage.readFrom(in, gson);
-            final TransferMessage finalRequest = request;
-            final String finalIp = senderIp;
 
             // Log the incoming request
             TransferLogger.logReceiveRequest(request.transferId, request.senderName, senderIp,
@@ -170,7 +167,10 @@ public class FileTransferService {
             long usableSpace = Files.getFileStore(DOWNLOAD_BASE).getUsableSpace();
             boolean enoughSpace = usableSpace >= request.totalSize + SPACE_SAFETY_MARGIN;
 
-            boolean accepted = waitForUiResponse(listener, finalRequest, finalIp, usableSpace, enoughSpace, hs.getVerificationCode());
+            // The listener blocks until the user answers; it must give up after REQUEST_TIMEOUT_SECONDS.
+            boolean accepted = listener.onIncomingRequest(request.transferId, request.senderName, senderIp,
+                    request.files, request.totalSize, request.totalFiles,
+                    usableSpace, enoughSpace, hs.getVerificationCode());
 
             TransferMessage.transferResponse(request.transferId, accepted).writeTo(out, gson);
             if (!accepted) {
@@ -293,21 +293,6 @@ public class FileTransferService {
         } catch (java.security.NoSuchAlgorithmException e) {
             throw new IllegalStateException(e);
         }
-    }
-
-    private static boolean waitForUiResponse(TransferListener listener, TransferMessage request, String senderIp,
-                                              long usableSpace, boolean enoughSpace, String verificationCode) {
-        boolean[] result = {false};
-        CountDownLatch latch = new CountDownLatch(1);
-        Platform.runLater(() -> {
-            result[0] = listener.onIncomingRequest(
-                    request.transferId, request.senderName, senderIp,
-                    request.files, request.totalSize, request.totalFiles,
-                    usableSpace, enoughSpace, verificationCode);
-            latch.countDown();
-        });
-        try { latch.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
-        return result[0];
     }
 
     private static Path resolveSafePath(Path base, String relativePath) throws IOException {

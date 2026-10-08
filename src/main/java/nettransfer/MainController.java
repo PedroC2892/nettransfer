@@ -37,10 +37,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class MainController implements TransferListener {
 
+    private static final Logger LOG = Logger.getLogger(MainController.class.getName());
     private static final long PEER_TIMEOUT_MS = 15000;
 
     private final Stage stage;
@@ -930,16 +937,36 @@ public class MainController implements TransferListener {
     public boolean onIncomingRequest(String transferId, String senderName, String senderIp,
                                      List<TransferMessage.FileEntry> files, long totalSize, int totalFiles,
                                      long usableSpace, boolean enoughSpace, String verificationCode) {
-        // Show the transfer entry immediately (shows overlay if not shown)
-        addToOverlay(transferId, senderName, senderIp, "RECEIVE", files, totalSize);
-
         TransferRequestDialog dlg = new TransferRequestDialog(stage, senderName, senderIp, files, totalSize, totalFiles,
                 usableSpace, enoughSpace, verificationCode);
-        boolean accepted = dlg.showAndWait();
-
-        ActiveTransfer at = activeTransfers.get(transferId);
-        if (at != null) at.setStatus(accepted ? TransferStatus.TRANSFERRING : TransferStatus.REJECTED);
-        return accepted;
+        CompletableFuture<Boolean> answer = new CompletableFuture<>();
+        Platform.runLater(() -> {
+            try {
+                // Show the transfer entry immediately (shows overlay if not shown)
+                addToOverlay(transferId, senderName, senderIp, "RECEIVE", files, totalSize);
+                boolean accepted = dlg.showAndWait();
+                ActiveTransfer at = activeTransfers.get(transferId);
+                // complete() is false if the request already timed out
+                if (answer.complete(accepted) && at != null) {
+                    at.setStatus(accepted ? TransferStatus.TRANSFERRING : TransferStatus.REJECTED);
+                }
+            } catch (RuntimeException e) {
+                answer.completeExceptionally(e);
+            }
+        });
+        try {
+            return answer.get(FileTransferService.REQUEST_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        } catch (TimeoutException e) {
+            answer.complete(false);
+            Platform.runLater(dlg::close);
+            return false;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        } catch (ExecutionException e) {
+            LOG.log(Level.WARNING, "Transfer request dialog failed", e.getCause());
+            return false;
+        }
     }
 
     @Override

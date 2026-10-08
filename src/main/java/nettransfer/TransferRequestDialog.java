@@ -28,6 +28,7 @@ public class TransferRequestDialog {
     private final boolean enoughSpace;
     private final String verificationCode;
     private boolean accepted = false;
+    private Stage dialog;
 
     public TransferRequestDialog(Stage owner, String senderName, String senderIp,
                                   List<TransferMessage.FileEntry> files, long totalSize, int totalFiles,
@@ -44,7 +45,7 @@ public class TransferRequestDialog {
     }
 
     public boolean showAndWait() {
-        Stage dialog = new Stage();
+        dialog = new Stage();
         dialog.initOwner(owner);
         dialog.initModality(Modality.APPLICATION_MODAL);
         dialog.initStyle(StageStyle.UNDECORATED);
@@ -155,5 +156,11 @@ public class TransferRequestDialog {
         dialog.showAndWait();
 
         return accepted;
+    }
+
+    /** Closes the dialog as a rejection; call on the FX thread. */
+    public void close() {
+        accepted = false;
+        if (dialog != null) dialog.close();
     }
 }
