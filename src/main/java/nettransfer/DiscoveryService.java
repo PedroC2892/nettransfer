@@ -1,7 +1,7 @@
 package nettransfer;
 
 import com.google.gson.Gson;
-import com.google.gson.JsonSyntaxException;
+import com.google.gson.JsonParseException;
 
 import javax.crypto.AEADBadTagException;
 import javax.crypto.Cipher;
@@ -41,12 +41,13 @@ public class DiscoveryService {
 
     private static final long RATE_WINDOW_MS = 10_000;
     private static final int RATE_MAX_PACKETS = 10;
+    private static final int MAX_TRACKED_SOURCES = 4096;
+    private static final Gson GSON = new Gson();
     private static final int GCM_IV_LENGTH = 12;
     private static final int GCM_TAG_BITS = 128;
 
     private static final SecretKeySpec DISCOVERY_KEY = deriveDiscoveryKey();
 
-    private final Gson gson = new Gson();
     private final String myId = AppSettings.load().getOrCreateDeviceId();
     private final SecureRandom random = new SecureRandom();
     private final byte[] plaintext;
@@ -54,9 +55,9 @@ public class DiscoveryService {
 
     public DiscoveryService(int tcpPort) {
         DiscoveryMessage msg = new DiscoveryMessage("DISCOVER", myId, getUserName(), getHostname(), tcpPort);
-        plaintext = gson.toJson(msg).getBytes(StandardCharsets.UTF_8);
+        plaintext = GSON.toJson(msg).getBytes(StandardCharsets.UTF_8);
         DiscoveryMessage bye = new DiscoveryMessage("GOODBYE", myId, getUserName(), getHostname(), tcpPort);
-        goodbyePlaintext = gson.toJson(bye).getBytes(StandardCharsets.UTF_8);
+        goodbyePlaintext = GSON.toJson(bye).getBytes(StandardCharsets.UTF_8);
     }
 
     private static SecretKeySpec deriveDiscoveryKey() {
@@ -69,7 +70,7 @@ public class DiscoveryService {
         }
     }
 
-    private byte[] encryptPacket(byte[] plain) throws GeneralSecurityException {
+    byte[] encryptPacket(byte[] plain) throws GeneralSecurityException {
         byte[] iv = new byte[GCM_IV_LENGTH];
         random.nextBytes(iv);
         Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
@@ -164,7 +165,7 @@ public class DiscoveryService {
     public void broadcastReceiver(int port, Consumer<Peer> onPeerDiscovered, Consumer<String> onPeerGone) throws IOException {
         Map<String, Deque<Long>> recentPackets = new HashMap<>();
         try (DatagramSocket socket = new DatagramSocket(port)) {
-            byte[] buffer = new byte[1024];
+            byte[] buffer = new byte[2048]; // 3 x 256 UTF-8 chars plus JSON and GCM overhead must fit
             while (true) {
                 DatagramPacket receivedPacket = new DatagramPacket(buffer, buffer.length);
                 socket.receive(receivedPacket);
@@ -172,23 +173,8 @@ public class DiscoveryService {
                 String ip = receivedPacket.getAddress().getHostAddress();
                 if (isRateLimited(recentPackets, ip)) continue;
 
-                byte[] plain;
-                try {
-                    plain = decryptPacket(receivedPacket.getData(), receivedPacket.getLength());
-                } catch (GeneralSecurityException e) {
-                    continue;
-                }
-
-                String json = new String(plain, StandardCharsets.UTF_8);
-                DiscoveryMessage received;
-                try {
-                    received = gson.fromJson(json, DiscoveryMessage.class);
-                } catch (JsonSyntaxException e) {
-                    continue;
-                }
-                if (!isValid(received) || received.id.equals(myId)) {
-                    continue;
-                }
+                DiscoveryMessage received = parse(receivedPacket.getData(), receivedPacket.getLength());
+                if (received == null || received.id.equals(myId)) continue;
 
                 if ("GOODBYE".equals(received.type)) {
                     onPeerGone.accept(received.id);
@@ -201,8 +187,24 @@ public class DiscoveryService {
         }
     }
 
-    private static boolean isRateLimited(Map<String, Deque<Long>> recentPackets, String ip) {
+    /** Decrypts and validates one packet; returns null for anything malformed, forged or unknown. */
+    static DiscoveryMessage parse(byte[] packet, int length) {
+        try {
+            byte[] plain = decryptPacket(packet, length);
+            DiscoveryMessage m = GSON.fromJson(new String(plain, StandardCharsets.UTF_8), DiscoveryMessage.class);
+            return isValid(m) ? m : null;
+        } catch (GeneralSecurityException | JsonParseException e) {
+            return null; // expected for foreign or corrupted traffic on the port
+        }
+    }
+
+    static boolean isRateLimited(Map<String, Deque<Long>> recentPackets, String ip) {
         long now = System.currentTimeMillis();
+        if (recentPackets.size() > MAX_TRACKED_SOURCES) {
+            // spoofed source addresses would otherwise grow the map without bound
+            recentPackets.values().removeIf(t -> t.isEmpty() || now - t.peekLast() > RATE_WINDOW_MS);
+            if (recentPackets.size() > MAX_TRACKED_SOURCES) recentPackets.clear();
+        }
         Deque<Long> times = recentPackets.computeIfAbsent(ip, k -> new ArrayDeque<>());
         while (!times.isEmpty() && now - times.peekFirst() > RATE_WINDOW_MS) times.pollFirst();
         if (times.size() >= RATE_MAX_PACKETS) return true;
@@ -211,7 +213,7 @@ public class DiscoveryService {
     }
 
     private static boolean isValid(DiscoveryMessage m) {
-        if (m == null) return false;
+        if (m == null || !("DISCOVER".equals(m.type) || "GOODBYE".equals(m.type))) return false;
         if (!isSaneString(m.id) || !isSaneString(m.userName) || !isSaneString(m.hostName)) return false;
         return m.tcpPort >= 1024 && m.tcpPort <= 65535;
     }
