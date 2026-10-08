@@ -7,14 +7,21 @@ import java.nio.file.StandardOpenOption;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class TransferLogger {
+    private static final Logger LOG = Logger.getLogger(TransferLogger.class.getName());
 
     public static final Path LOG_FILE = FileTransferService.DOWNLOAD_BASE.resolve("nettransfer.log");
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss");
 
     static {
-        try { Files.createDirectories(FileTransferService.DOWNLOAD_BASE); } catch (IOException ignored) {}
+        try {
+            Files.createDirectories(FileTransferService.DOWNLOAD_BASE);
+        } catch (IOException e) {
+            LOG.log(Level.WARNING, "Could not create " + FileTransferService.DOWNLOAD_BASE, e);
+        }
     }
 
     public static void logSendStart(String transferId, String peerName, String peerIp,
@@ -162,7 +169,7 @@ public class TransferLogger {
             Files.createDirectories(LOG_FILE.getParent());
             Files.writeString(LOG_FILE, text, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
         } catch (IOException e) {
-            System.err.println("[TransferLogger] " + e.getMessage());
+            LOG.log(Level.WARNING, "Could not write transfer log", e);
         }
     }
 }

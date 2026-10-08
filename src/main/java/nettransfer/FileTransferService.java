@@ -31,8 +31,11 @@ import java.util.Set;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class FileTransferService {
+    private static final Logger LOG = Logger.getLogger(FileTransferService.class.getName());
     private static final long PROGRESS_INTERVAL_MS = 150;
     private static final long SPACE_SAFETY_MARGIN = 100L * 1024 * 1024;
     /** How long the receiver's user has to accept or reject an incoming transfer. */
@@ -291,7 +294,7 @@ public class FileTransferService {
             cleanupPartial(id, destBase, writtenFiles);
             listener.onStatusChange(id, TransferStatus.ERROR);
         } finally {
-            try { socket.close(); } catch (IOException ignored) {}
+            try { socket.close(); } catch (IOException e) { LOG.log(Level.FINE, "Close failed", e); }
         }
     }
 
@@ -305,12 +308,16 @@ public class FileTransferService {
                     removed++;
                     freed += size;
                 }
-            } catch (IOException ignored) {}
+            } catch (IOException e) {
+                LOG.log(Level.WARNING, "Could not remove partial file " + p, e);
+            }
         }
         if (destBase != null) {
             try (Stream<Path> stream = Files.exists(destBase) ? Files.list(destBase) : null) {
                 if (stream != null && stream.findAny().isEmpty()) Files.deleteIfExists(destBase);
-            } catch (IOException ignored) {}
+            } catch (IOException e) {
+                LOG.log(Level.WARNING, "Could not remove empty folder " + destBase, e);
+            }
         }
         if (removed > 0) TransferLogger.logPartialCleanup(transferId, removed, freed);
     }

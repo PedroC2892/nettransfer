@@ -908,7 +908,8 @@ public class MainController implements TransferListener {
                 if (os.contains("linux")) new ProcessBuilder("xdg-open", path).start();
                 else Desktop.getDesktop().open(new File(path));
             } catch (Exception e) {
-                try { Desktop.getDesktop().open(new File(path)); } catch (Exception ignored) {}
+                try { Desktop.getDesktop().open(new File(path)); }
+                catch (Exception e2) { LOG.log(Level.WARNING, "Could not open " + path, e2); }
             }
         }).start();
     }

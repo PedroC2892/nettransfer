@@ -10,8 +10,11 @@ import java.nio.file.Paths;
 import java.util.LinkedHashSet;
 import java.util.Set;
 import java.util.UUID;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class AppSettings {
+    private static final Logger LOG = Logger.getLogger(AppSettings.class.getName());
     private static final Path FILE = Paths.get(System.getProperty("user.home"), ".config", "nettransfer", "settings.json");
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
@@ -37,8 +40,8 @@ public class AppSettings {
                     return loaded;
                 }
             }
-        } catch (IOException | RuntimeException ignored) {
-            // fall through to defaults
+        } catch (IOException | RuntimeException e) {
+            LOG.log(Level.WARNING, "Could not read " + FILE + ", using defaults", e);
         }
         return new AppSettings();
     }
@@ -48,7 +51,7 @@ public class AppSettings {
             Files.createDirectories(FILE.getParent());
             Files.writeString(FILE, GSON.toJson(this));
         } catch (IOException e) {
-            System.err.println("[AppSettings] failed to save: " + e.getMessage());
+            LOG.log(Level.WARNING, "Could not save " + FILE, e);
         }
     }
 

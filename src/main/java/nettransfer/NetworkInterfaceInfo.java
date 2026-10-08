@@ -7,8 +7,11 @@ import java.net.SocketException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class NetworkInterfaceInfo {
+    private static final Logger LOG = Logger.getLogger(NetworkInterfaceInfo.class.getName());
     public final String name;
     public final String displayName;
     public final String ipAddress;
@@ -56,8 +59,9 @@ public class NetworkInterfaceInfo {
                             bcast != null, mtu, mac));
                 }
             }
-        } catch (SocketException ignored) {
+        } catch (SocketException e) {
             // no interfaces available right now — return what we have (possibly empty)
+            LOG.log(Level.FINE, "Interface enumeration failed", e);
         }
         return result;
     }

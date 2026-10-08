@@ -25,6 +25,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Discovery packets carry the username and hostname of every peer on the LAN.
@@ -36,6 +38,7 @@ import java.util.function.Consumer;
  * by anyone who doesn't have the app.
  */
 public class DiscoveryService {
+    private static final Logger LOG = Logger.getLogger(DiscoveryService.class.getName());
     public static final int DISCOVERY_PORT = 54321;
     public static final long BROADCAST_INTERVAL_MS = 5000;
 
@@ -132,6 +135,7 @@ public class DiscoveryService {
                     socket.send(new DatagramPacket(packet, packet.length, bcast, port));
                 } catch (IOException e) {
                     // interface may have changed state between enumeration and send — skip it this cycle
+                    LOG.log(Level.FINE, "Broadcast on " + info.name + " failed", e);
                 } catch (GeneralSecurityException e) {
                     TransferLogger.logSecurityEvent("Failed to encrypt discovery packet: " + e.getMessage(), info.ipAddress);
                 }
@@ -156,8 +160,9 @@ public class DiscoveryService {
                 InetAddress bcast = InetAddress.getByName(info.broadcastAddress);
                 byte[] packet = encryptPacket(goodbyePlaintext);
                 socket.send(new DatagramPacket(packet, packet.length, bcast, port));
-            } catch (Exception ignored) {
+            } catch (IOException | GeneralSecurityException e) {
                 // best-effort: the stale timeout is the fallback if this doesn't get through
+                LOG.log(Level.FINE, "Goodbye on " + info.name + " failed", e);
             }
         }
     }

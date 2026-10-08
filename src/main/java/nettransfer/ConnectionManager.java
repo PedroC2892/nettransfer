@@ -6,8 +6,11 @@ import java.net.Socket;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 public class ConnectionManager {
+    private static final Logger LOG = Logger.getLogger(ConnectionManager.class.getName());
     private static final int MAX_CONNECTIONS = 8;
 
     private final ServerSocket serverSocket;
@@ -36,15 +39,15 @@ public class ConnectionManager {
                 Socket socket = serverSocket.accept();
                 if (!connectionSlots.tryAcquire()) {
                     TransferLogger.logConnectionRejected(socket.getInetAddress().getHostAddress());
-                    try { socket.close(); } catch (IOException ignored) {}
+                    socket.close();
                     continue;
                 }
                 try {
                     socket.setSoTimeout(FileTransferService.SOCKET_TIMEOUT_MS);
                 } catch (IOException e) {
                     connectionSlots.release();
-                    try { socket.close(); } catch (IOException ignored) {}
-                    continue;
+                    socket.close();
+                    throw e;
                 }
                 pool.submit(() -> {
                     try {
@@ -55,7 +58,7 @@ public class ConnectionManager {
                 });
             } catch (IOException e) {
                 if (!serverSocket.isClosed()) {
-                    e.printStackTrace();
+                    LOG.log(Level.WARNING, "Failed to accept connection", e);
                 }
             }
         }

@@ -6,7 +6,11 @@ import javafx.scene.Scene;
 import javafx.scene.image.Image;
 import javafx.stage.Stage;
 
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
 public class App extends Application {
+    private static final Logger LOG = Logger.getLogger(App.class.getName());
 
     public static final String VERSION = "1.2.0";
 
@@ -23,7 +27,8 @@ public class App extends Application {
             try {
                 discoveryService.broadcastReceiver(DiscoveryService.DISCOVERY_PORT, controller::onPeerDiscovered, controller::onPeerGone);
             } catch (Exception e) {
-                e.printStackTrace();
+                // usually the UDP port is taken by another running instance
+                LOG.log(Level.SEVERE, "Discovery receiver stopped; this device will not see peers", e);
             }
         });
         receiverThread.setDaemon(true);
@@ -33,7 +38,7 @@ public class App extends Application {
             try {
                 discoveryService.broadcastDiscovery(DiscoveryService.DISCOVERY_PORT, DiscoveryService.BROADCAST_INTERVAL_MS);
             } catch (Exception e) {
-                e.printStackTrace();
+                LOG.log(Level.SEVERE, "Discovery broadcaster stopped; peers will not see this device", e);
             }
         });
         broadcastThread.setDaemon(true);
