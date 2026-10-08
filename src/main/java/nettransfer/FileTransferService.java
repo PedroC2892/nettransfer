@@ -231,7 +231,7 @@ public class FileTransferService {
                     while (remaining > 0) {
                         int toRead = (int) Math.min(buffer.length, remaining);
                         int read = in.read(buffer, 0, toRead);
-                        if (read == -1) throw new EOFException("Ligacao fechada durante a transferencia");
+                        if (read == -1) throw new EOFException("Connection closed during transfer");
                         fos.write(buffer, 0, read);
                         digest.update(buffer, 0, read);
                         remaining -= read;
@@ -312,7 +312,7 @@ public class FileTransferService {
 
     private static Path resolveSafePath(Path base, String relativePath) throws IOException {
         Path resolved = base.resolve(relativePath).normalize();
-        if (!resolved.startsWith(base)) throw new IOException("Path traversal detetado: " + relativePath);
+        if (!resolved.startsWith(base)) throw new IOException("Path traversal detected: " + relativePath);
         return resolved;
     }
 

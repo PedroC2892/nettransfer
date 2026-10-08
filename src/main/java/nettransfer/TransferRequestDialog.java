@@ -128,7 +128,7 @@ public class TransferRequestDialog {
         acceptBtn.setDisable(!enoughSpace);
         acceptBtn.setOnAction(e -> { accepted = true; dialog.close(); });
 
-        Button rejectBtn = new Button("Recusar  [Esc]");
+        Button rejectBtn = new Button("Reject  [Esc]");
         rejectBtn.getStyleClass().add("btn-secondary");
         rejectBtn.setPrefWidth(130);
         rejectBtn.setCancelButton(true);

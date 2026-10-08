@@ -96,7 +96,7 @@ public class DiscoveryService {
         try {
             return InetAddress.getLocalHost().getHostName();
         } catch (UnknownHostException e) {
-            return "desconhecido";
+            return "unknown";
         }
     }
 
