@@ -37,6 +37,7 @@ public class FileTransferService {
     private static final long SPACE_SAFETY_MARGIN = 100L * 1024 * 1024;
     /** How long the receiver's user has to accept or reject an incoming transfer. */
     public static final int REQUEST_TIMEOUT_SECONDS = 60;
+    static final int SOCKET_TIMEOUT_MS = 30_000;
 
     private static final int MAX_ENTRIES = 100_000;
     private static final Pattern UUID_PATTERN =
@@ -91,6 +92,7 @@ public class FileTransferService {
 
             try (Socket socket = new Socket()) {
                 socket.connect(new InetSocketAddress(peer.ipAddress, peer.tcpPort), 5000);
+                socket.setSoTimeout(SOCKET_TIMEOUT_MS);
 
                 Handshake hs = Handshake.forSender(socket.getInputStream(), socket.getOutputStream());
                 listener.onVerificationCode(transferId, hs.getVerificationCode());
@@ -101,7 +103,11 @@ public class FileTransferService {
 
                 TransferMessage.transferRequest(transferId, senderName, fileEntries, totalSize, totalFiles).writeTo(out, gson);
 
+                // the receiver's user may take up to REQUEST_TIMEOUT_SECONDS to answer
+                socket.setSoTimeout(REQUEST_TIMEOUT_SECONDS * 1000 + SOCKET_TIMEOUT_MS);
                 TransferMessage response = TransferMessage.readFrom(in, gson);
+                socket.setSoTimeout(SOCKET_TIMEOUT_MS);
+                if (!"TRANSFER_RESPONSE".equals(response.type)) throw new IOException("Unexpected message: " + response.type);
                 if (!response.accepted) {
                     TransferLogger.logSendRejected(transferId, peer.name);
                     listener.onStatusChange(transferId, TransferStatus.REJECTED);

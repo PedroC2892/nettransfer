@@ -9,7 +9,6 @@ import java.util.concurrent.Semaphore;
 
 public class ConnectionManager {
     private static final int MAX_CONNECTIONS = 8;
-    private static final int SOCKET_READ_TIMEOUT_MS = 30_000;
 
     private final ServerSocket serverSocket;
     private final TransferListener listener;
@@ -41,7 +40,7 @@ public class ConnectionManager {
                     continue;
                 }
                 try {
-                    socket.setSoTimeout(SOCKET_READ_TIMEOUT_MS);
+                    socket.setSoTimeout(FileTransferService.SOCKET_TIMEOUT_MS);
                 } catch (IOException e) {
                     connectionSlots.release();
                     try { socket.close(); } catch (IOException ignored) {}

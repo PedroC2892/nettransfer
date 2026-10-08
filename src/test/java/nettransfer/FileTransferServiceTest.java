@@ -100,4 +100,26 @@ class FileTransferServiceTest {
         assertEquals(TransferStatus.ERROR, result[0]);
         assertEquals(TransferStatus.ERROR, result[1]);
     }
+
+    /** A receiver answering with anything but TRANSFER_RESPONSE must not be read as a rejection or acceptance. */
+    @Test
+    void senderRejectsUnexpectedResponse() throws Exception {
+        Path src = Files.writeString(tmp.resolve("a.txt"), "hello");
+        try (ServerSocket server = new ServerSocket(0, 1, java.net.InetAddress.getLoopbackAddress())) {
+            TestSupport.RecordingListener sender = new TestSupport.RecordingListener(true);
+            FileTransferService.sendFiles(TestSupport.loopbackPeer(server), List.of(src.toFile()),
+                    UUID.randomUUID().toString(), "tester", sender);
+            try (java.net.Socket s = server.accept()) {
+                Handshake hs = Handshake.forReceiver(s.getInputStream(), s.getOutputStream());
+                com.google.gson.Gson gson = new com.google.gson.Gson();
+                java.io.DataInputStream in = new java.io.DataInputStream(new EncryptedInputStream(s.getInputStream(), hs));
+                java.io.DataOutputStream out = new java.io.DataOutputStream(new EncryptedOutputStream(s.getOutputStream(), hs));
+                TransferMessage.readFrom(in, gson);
+                TransferMessage bogus = TransferMessage.transferResponse("x", true);
+                bogus.type = "FILE_END";
+                bogus.writeTo(out, gson);
+                assertEquals(TransferStatus.ERROR, sender.await());
+            }
+        }
+    }
 }
