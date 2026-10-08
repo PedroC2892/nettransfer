@@ -63,4 +63,39 @@ final class TestSupport {
     static Peer loopbackPeer(ServerSocket server) {
         return new Peer("test-peer", "tester", "localhost", "127.0.0.1", server.getLocalPort());
     }
+
+    /** Speaks the protocol by hand so tests can send what an honest sender never would. */
+    static final class RogueSender implements AutoCloseable {
+        private final Socket socket;
+        private final java.io.DataOutputStream out;
+        private final java.io.DataInputStream in;
+        private final com.google.gson.Gson gson = new com.google.gson.Gson();
+
+        RogueSender(ServerSocket server) throws Exception {
+            socket = new Socket(InetAddress.getLoopbackAddress(), server.getLocalPort());
+            socket.setSoTimeout(10_000);
+            Handshake hs = Handshake.forSender(socket.getInputStream(), socket.getOutputStream());
+            out = new java.io.DataOutputStream(new java.io.BufferedOutputStream(
+                    new EncryptedOutputStream(socket.getOutputStream(), hs)));
+            in = new java.io.DataInputStream(new EncryptedInputStream(socket.getInputStream(), hs));
+        }
+
+        void send(TransferMessage m) throws IOException { m.writeTo(out, gson); }
+
+        void sendRaw(byte[] data) throws IOException { out.write(data); out.flush(); }
+
+        TransferMessage read() throws IOException { return TransferMessage.readFrom(in, gson); }
+
+        @Override public void close() throws IOException { socket.close(); }
+    }
+
+    static TransferMessage request(List<TransferMessage.FileEntry> files) {
+        long total = files.stream().filter(f -> !f.isDirectory).mapToLong(f -> f.size).sum();
+        int count = (int) files.stream().filter(f -> !f.isDirectory).count();
+        return TransferMessage.transferRequest(java.util.UUID.randomUUID().toString(), "rogue", files, total, count);
+    }
+
+    static TransferMessage.FileEntry file(String path, long size) {
+        return new TransferMessage.FileEntry(path, path, size, false);
+    }
 }

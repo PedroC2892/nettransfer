@@ -138,7 +138,7 @@ public class TransferLogger {
 
     private static String header(String event, String id) {
         String ts = LocalDateTime.now().format(FMT);
-        String idPart = id != null ? "  #" + id.substring(0, 8) : "";
+        String idPart = id != null ? "  #" + id.substring(0, Math.min(8, id.length())) : "";
         return "\n── " + event + idPart + "\n"
              + "   " + ts + "\n";
     }

@@ -23,9 +23,12 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -34,6 +37,13 @@ public class FileTransferService {
     private static final long SPACE_SAFETY_MARGIN = 100L * 1024 * 1024;
     /** How long the receiver's user has to accept or reject an incoming transfer. */
     public static final int REQUEST_TIMEOUT_SECONDS = 60;
+
+    private static final int MAX_ENTRIES = 100_000;
+    private static final Pattern UUID_PATTERN =
+            Pattern.compile("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}");
+    private static final String FORBIDDEN_CHARS = "\\:*?\"<>|";
+    private static final Pattern WINDOWS_RESERVED =
+            Pattern.compile("(?i)(CON|PRN|AUX|NUL|COM[0-9]|LPT[0-9])(\\..*)?");
 
     static final Path DOWNLOAD_BASE = Paths.get(System.getProperty("user.home"), "Downloads", "NetTransfer");
     private static final DateTimeFormatter FOLDER_FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd_HH-mm-ss");
@@ -159,6 +169,7 @@ public class FileTransferService {
             DataOutputStream out = new DataOutputStream(new BufferedOutputStream(encOut));
 
             request = TransferMessage.readFrom(in, gson);
+            validateRequest(request);
 
             // Log the incoming request
             TransferLogger.logReceiveRequest(request.transferId, request.senderName, senderIp,
@@ -295,7 +306,53 @@ public class FileTransferService {
         }
     }
 
+    /** Rejects any request whose fields could crash, mislead or exhaust the receiver. */
+    static void validateRequest(TransferMessage r) throws IOException {
+        if (!"TRANSFER_REQUEST".equals(r.type)) throw new IOException("Expected TRANSFER_REQUEST, got " + r.type);
+        if (r.transferId == null || !UUID_PATTERN.matcher(r.transferId).matches()) {
+            r.transferId = null; // never echo an unchecked id into the log
+            throw new IOException("Invalid transfer id");
+        }
+        if (!isPrintable(r.senderName, 256)) throw new IOException("Invalid sender name");
+        if (r.files == null || r.files.size() > MAX_ENTRIES) throw new IOException("Invalid file list");
+        Set<String> seen = new HashSet<>();
+        long sum = 0;
+        int count = 0;
+        for (TransferMessage.FileEntry fe : r.files) {
+            if (fe == null) throw new IOException("Null file entry");
+            checkRelativePath(fe.relativePath);
+            if (!seen.add(fe.relativePath)) throw new IOException("Duplicate entry: " + fe.relativePath);
+            if (fe.size < 0 || (fe.isDirectory && fe.size != 0)) throw new IOException("Invalid size: " + fe.relativePath);
+            fe.name = baseName(fe.relativePath); // display name is derived locally, never trusted
+            if (!fe.isDirectory) {
+                sum = Math.addExact(sum, fe.size);
+                count++;
+            }
+        }
+        if (sum != r.totalSize || count != r.totalFiles) throw new IOException("Totals do not match the file list");
+    }
+
+    /**
+     * A remote path must be relative, '/'-separated, and every component must be a
+     * plain file name that is valid on Windows, macOS and Linux alike.
+     */
+    static void checkRelativePath(String path) throws IOException {
+        if (path == null || path.isEmpty() || path.length() > 4096) throw new IOException("Invalid path length");
+        for (String part : path.split("/", -1)) {
+            if (part.equals(".") || part.equals("..") || !isPrintable(part, 255) || part.chars().anyMatch(c -> FORBIDDEN_CHARS.indexOf(c) >= 0)
+                    || part.endsWith(".") || part.endsWith(" ")
+                    || WINDOWS_RESERVED.matcher(part).matches()) {
+                throw new IOException("Unsafe file name: " + path.replaceAll("\\p{Cntrl}", "?"));
+            }
+        }
+    }
+
+    private static boolean isPrintable(String s, int maxLen) {
+        return s != null && !s.isEmpty() && s.length() <= maxLen && s.chars().noneMatch(Character::isISOControl);
+    }
+
     private static Path resolveSafePath(Path base, String relativePath) throws IOException {
+        checkRelativePath(relativePath);
         Path resolved = base.resolve(relativePath).normalize();
         if (!resolved.startsWith(base)) throw new IOException("Path traversal detected: " + relativePath);
         return resolved;
